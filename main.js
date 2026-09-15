@@ -440,8 +440,10 @@ const CONFIG = {
   // was wrong: the seeds sit exactly on the corner and it is DIFFUSION that carries the
   // visible mass inward off it. Nudging the group back out is the honest correction for
   // that, and it is easier to set by eye than to derive.
-  offsetX: 0.220,           // viewport heights, positive toward the corner's own side. Both
-  offsetY: 0.245,           //   were settled on ver28's panel and read off the link.
+  offsetX: -0.100,          // the client's panel values, shipped as defaults. They are
+  offsetY: 0.405,           //   deltas from the anchored composition: OFFSET_NEUTRAL below
+                            //   carries these numbers, so the panel's home IS the deployed
+                            //   look and dragging a bar moves the cloud from it
                             //   FRACTIONS of the viewport, not pixels, so the placement holds
                             //   its proportion as the window changes rather than sitting at a
                             //   fixed pixel offset that drifts across screen sizes.
@@ -458,7 +460,8 @@ const CONFIG = {
   // CLOCK the motes are read from rather than any one of their speeds, so their motion stays
   // in proportion however fast it runs. The cloud's own sway is deliberately not included:
   // that is the camera's relationship to the volume, not the particles' own life.
-  speed: 0.55,              // The pace lives in simSpeed now — this scales the clock the
+  speed: 0.20,              // the client's panel value: the whole particle clock, sim and
+                            //   surface alike, runs at this fraction of real seconds
                             //   simulation is stepped with, and 1 means one second of the
                             //   cloud's life per second of the page's. Under 1 here because
                             //   the motion was asked for slower: it scales the whole clock,
@@ -621,6 +624,7 @@ const CONFIG = {
                             // force laid along the pointer's trail, which leaves momentum
                             // behind for the field to carry off. No displacement term.
                             //   The displacement path survives below this dial only.
+  hoverPush: 3.00,          // the client's panel value: a hard, immediate shove
 
   // The far end of the dial, stated as the thing that can be judged by looking: how long a
   // shove the cursor gave keeps travelling. settle and drag are solved from it — see
@@ -647,9 +651,7 @@ const CONFIG = {
   // it removed as well, leaving the push six times weaker than the ambient flow and invisible.
   //
   // Solving for the force instead, F = speed / (dt * gain), makes the number mean one thing
-  // at every setting of the dial.
-  hoverPush: 1.20,          // of the mass radius per second. The client's setting, and it
-                            //   is the top of the bar's range — see the note there
+  // at every setting of the dial. The value itself lives with hoverFeel above.
 
   // ---- the trail ------------------------------------------------------------------
   // The force is laid along the path the pointer took, not gathered at the single point it
@@ -800,8 +802,9 @@ const CONFIG = {
   //
   // Radius and push are fractions of viewport HEIGHT, not world units, so the opening
   // holds its size on screen at any window. Don't put world units here.
-  mouseRadius: 0.350,       // ver30's reach: a wide tube through the cloud, divided by the
-                            // group's scale here so the number survives a resize
+  mouseRadius: 0.080,       // the client's panel value: a local opening about the pointer,
+                            //   divided by the group's scale here so the number survives a
+                            //   resize
   mouseStrength: 0.075,     // ver30's value. Only read when hoverFeel < 1 — the displacement
                             // end of the dial, silent at the shipped setting
   falloffPower: 3.0,        // 1 = linear, 2 = soft outer edge with a firm core
@@ -1125,8 +1128,8 @@ const CONFIG = {
   // Halved from 0.667. The pairing with the box still holds — the box is a fraction of the
   // size the cloud reaches when open, and this is the trip back — but the fraction is now
   // 0.75 rather than 0.6, so the cloud grows half as far off its resting size.
-  expandAmount: 0.34,       // ver30's bloom: the cloud grows by a third when the pointer
-                            // comes near, which is half of what makes the hover read
+  expandAmount: 0.00,       // the client's panel value: the bloom is off, the hover is the
+                            // trail's force alone
   // How near the pointer must come, as fractions of viewport height measured from the
   // cloud's centre. FULL strength anywhere inside expandHoverInner, then fading to
   // nothing at expandHoverRadius.
@@ -4582,6 +4585,9 @@ function renderBloom() {
 // The same simulated population travels as one rolling cloud along the bottom menu.
 let worldPush = 0;          // mouseStrength converted from frame-fraction to world units
 let simLeash = 0;           // how far a grain may stray from its seat, in simulation units
+// The shipped composition's own offset. The panel's offset bars are deltas FROM this, so
+// the defaults the client asked for are both what CONFIG carries and where the cloud sits.
+const OFFSET_NEUTRAL = { x: -0.100, y: 0.405 };
 const categoryMotion = { x: 0, y: 0, vx: 0, vy: 0, ready: false };
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
 
@@ -4627,8 +4633,12 @@ function place() {
   const ppw = innerHeight / vh;
   // The emitter is anchored, not carried: it spans the whole bottom menu, and the grains
   // migrate to the selected category through the simulation. A switch therefore never
-  // looks like the effect being picked up and put down somewhere else.
-  group.position.set(0, (innerHeight / 2 - floor) / ppw, CONFIG.anchorZ);
+  // looks like the effect being picked up and put down somewhere else. The offset bars
+  // trim this anchor in fractions of the frame, as deltas from the shipped composition.
+  group.position.set(
+    (CONFIG.offsetX - OFFSET_NEUTRAL.x) * vh,
+    (innerHeight / 2 - floor) / ppw + (CONFIG.offsetY - OFFSET_NEUTRAL.y) * vh,
+    CONFIG.anchorZ);
   uniforms.uMound.value.set(
     (page.width * 0.5) / ppw / group.scale.x,
     (floor - y * innerHeight + 38) / ppw / group.scale.x,
