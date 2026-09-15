@@ -5027,6 +5027,24 @@ if (uiEl && PARAMS.get('ui') !== '1') {
     { key: 'particleCount', name: 'quantity', cst: 'CONFIG.particleCount',
       min: 50000, max: 800000, step: 25000, value: CONFIG.particleCount,
       rebuild: true, round: true, text: () => CONFIG.particleCount.toLocaleString('en-US') },
+    // The pace. Read out of CONFIG every frame by the loop's clock accumulation, so it
+    // drags live and needs neither place() nor a rebuild.
+    { key: 'speed', name: 'speed', cst: 'CONFIG.speed',
+      min: 0, max: 1.5, step: 0.05, value: CONFIG.speed,
+      text: () => CONFIG.speed.toFixed(2) },
+    // The three basic hover dials: how far the reach extends, how hard the trail's force
+    // drives the grains, and how much the cloud blooms when the pointer comes near.
+    // reach and push are re-read from CONFIG every frame (place() and stepSim); the bloom
+    // lives on the material, so its uniform is pointed at the same value here.
+    { key: 'mouseRadius', name: 'hover reach', cst: 'CONFIG.mouseRadius',
+      min: 0.02, max: 0.60, step: 0.005, value: CONFIG.mouseRadius,
+      place: true, text: () => CONFIG.mouseRadius.toFixed(3) },
+    { key: 'hoverPush', name: 'hover push', cst: 'CONFIG.hoverPush',
+      min: 0, max: 3.0, step: 0.05, value: CONFIG.hoverPush,
+      text: () => CONFIG.hoverPush.toFixed(2) },
+    { key: 'expandAmount', name: 'hover bloom', cst: 'CONFIG.expandAmount',
+      min: 0, max: 0.60, step: 0.01, value: CONFIG.expandAmount,
+      uni: 'uExpandAmount', text: () => CONFIG.expandAmount.toFixed(2) },
     { key: 'offsetX', name: 'offset x', cst: 'CONFIG.offsetX',
       min: -0.5, max: 1.0, step: 0.005, value: CONFIG.offsetX,
       place: true, text: () => CONFIG.offsetX.toFixed(3) },
@@ -5035,7 +5053,7 @@ if (uiEl && PARAMS.get('ui') !== '1') {
       place: true, text: () => CONFIG.offsetY.toFixed(3) },
   ];
 
-  uiEl.innerHTML = '<h2>quantity &amp; offset</h2>' + ROWS.map((r, i) =>
+  uiEl.innerHTML = '<h2>particles</h2>' + ROWS.map((r, i) =>
     '<div class="row"><div class="lbl">'
     + '<span class="name">' + r.name + '</span>'
     + '<span class="val" id="pv' + i + '">' + r.text() + '</span></div>'
