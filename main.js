@@ -693,7 +693,9 @@ const CONFIG = {
   // the falloff does, and they heap up into a bright ring that stands there for as long as
   // the pointer does. A rotation has no divergence - it stirs the ink rather than sweeping
   // it into a pile, so there is nothing for a ring to be made of.
-  hoverSwirl: 0.70,         // 0 = all outward, which is ver13; 1 = all swirl
+  hoverSwirl: 0.88,         // 0 = all outward, which is ver13; 1 = all swirl. High: the
+                            // hover should mostly FLOW the particles around the pointer
+                            // (a stir you can see) rather than shove them radially out
 
   // The bloom, all three numbers read off the reference and all given per unit of the mass
   // radius so a resize does not have to re-derive them.
@@ -809,7 +811,10 @@ const CONFIG = {
                             //   resize
   mouseStrength: 0.075,     // ver30's value. Only read when hoverFeel < 1 — the displacement
                             // end of the dial, silent at the shipped setting
-  falloffPower: 3.0,        // 1 = linear, 2 = soft outer edge with a firm core
+  falloffPower: 1.3,        // 1 = linear, 2 = soft outer edge with a firm core. LOW on
+                            // purpose: the client wants the hover to stir the particles,
+                            // not carve a hard-rimmed hole — at 3.0 the push held near
+                            // full strength to the rim and the boundary read as a circle
   mouseSmoothing: 0.25,     // lag on the cursor the motes actually see, per frame. Low
                             //   values make the cloud trail the pointer.
   mouseFadeSeconds: 0.25,   // fade in/out of the whole response when the pointer arrives
@@ -834,13 +839,12 @@ const CONFIG = {
                             //   mouseRadius: this wants to give several lobes ACROSS the
                             //   opening, not one
 
-  mouseCurlBoost: 0.0,      // extra curl inside the push, as a multiple of the falloff.
-                            //   Zero: this and expandCurlBoost between them made the cloud
-                            //   visibly change PACE under the pointer, which reads as the
-                            //   effect being startled. The cursor may open a hole and grow
-                            //   the mass; it may not run the clock faster.
-                            //   Keep it low — it scatters motes back into the hole the
-                            //   push just made, and over ~3 it closes it completely.
+  mouseCurlBoost: 2.2,      // extra curl inside the push, as a multiple of the falloff.
+                            //   This is the "movement, not a hole" half of the hover: the
+                            //   dent stays shallow (worldPush is small) and this makes the
+                            //   particles CHURN visibly inside the reach instead — a pace
+                            //   change you can see, with no rim to read as a circle. Over
+                            //   ~3 it scatters motes back across the dent and closes it.
 
   // ------------------------------------------------------------ sphere shading
   // Each mote is a lit sphere, reconstructed per pixel on its billboard. These are the
@@ -1962,6 +1966,26 @@ void main(){
     pos.x += curlOffset.x * curlInfluence;
     pos.y += curlOffset.y * curlInfluence;
     pos.z += curlOffset.z * 0.1 * curlInfluence;
+  }
+
+  // The cursor's STIR — the visible half of the hover now that the dent is kept shallow.
+  // Two things the block above cannot give it: a fast clock (the base field crawls at
+  // uTime * uCurlSpeed * 0.01, far too lethargic for a stir to read as movement at the slow
+  // speed dial) and a per-grain phase (aShape), so neighbours sample different slices and
+  // the cloud roils instead of swaying. Riding the same soft falloff as the dent, it swirls
+  // the grains around the pointer and lets them re-form — motion, with no rim to read as a
+  // carved circle.
+  float mouseChurn = aCurlResp * pushFalloff * uMouseCurlBoost;
+  if (mouseChurn > 0.001) {
+    float ctf = uTime * 2.5 + aShape * 11.0;
+    // the amplitude is given as frequency × 10 so the returned field is ~10 local units of
+    // travel — real, visible grains of motion, independent of the curl frequency
+    float stirFreq = uCurlFrequency * 1.7;
+    vec3 stir = curlNoise(vec3(pos.x, pos.y, ctf), stirFreq, ctf,
+                          stirFreq * 10.0, uCurlDivergence);
+    pos.x += stir.x * mouseChurn;
+    pos.y += stir.y * mouseChurn;
+    pos.z += stir.z * 0.1 * mouseChurn;
   }
 
   // The OLD hover's displacement, now carrying the trail's whole push. A bounded
@@ -4702,10 +4726,13 @@ function place() {
   // quietly since the scale control was added.
   uniforms.uMouseRadius.value = (CONFIG.mouseRadius * vh) / group.scale.x;
   // The hover's visible strength is the vertex displacement now, and it is driven by the
-  // HOVER PUSH dial: push × reach × frame height, so a wider hole also shoves further and
-  // the number still means "a hard, immediate shove" at any screen size. Divided by the
-  // group's scale, like the reach above, because the ray lives in the group's local space.
-  worldPush = CONFIG.hoverPush * CONFIG.mouseRadius * vh * 0.35 / group.scale.x;
+  // HOVER PUSH dial: push × reach × frame height, so a wider reach also stirs further and
+  // the number still means the same thing at any screen size. The scale is small (0.10) on
+  // purpose: the client asked for a hover WITHOUT a strong carved radius — the dent only
+  // dents softly now, and the visible response is the churn (mouseCurlBoost) inside the
+  // reach. Divided by the group's scale, like the reach above, because the ray lives in
+  // the group's local space.
+  worldPush = CONFIG.hoverPush * CONFIG.mouseRadius * vh * 0.10 / group.scale.x;
 
   // The bloom grows the cloud away from the SCREEN CORNER, so the origin is that corner
   // expressed in the group's own space — not the group's origin, which is only wherever
