@@ -467,12 +467,12 @@ const CONFIG = {
                             //   the motion was asked for slower: it scales the whole clock,
                             //   so the drift, the bloom and the birth-to-death all slow
                             //   together and the character of the motion survives it.
-  jitterAmount: 1.0,        // the client's panel value: how noisy each grain's own position
-                            //   wander is, as a multiple of the tuned look (1.0 = up to 3%
-                            //   of the frame height across, 1.2% vertically). The mound
-                            //   reads "too much like a shape" when this is low — the grains
-                            //   ride the ridges in lockstep — and falls apart into static
-                            //   at high settings. 0 is the clean mound.
+  flowNoise: 1.2,           // the NOISE dial: the organic surface noise, the same
+                            //   curl-and-gradient field family the simulation's velocity
+                            //   carries — coherent across space, drifting in time. It makes
+                            //   the mound breathe and ripple like a fluid. 0 is the clean,
+                            //   still mound; an earlier per-grain wander (each grain on its
+                            //   own random seed) read as fuzz, not fluid, and was removed.
 
   // ------------------------------------------------------------ parallax
   // A slow sway of the whole volume. With a fixed camera this is the only thing that
@@ -626,12 +626,13 @@ const CONFIG = {
   // holds one size and one shape, and is gone the frame the pointer leaves. That is a torch
   // shone at a spot, and no amount of roughening its rim stops it being one. Only a force
   // leaves something behind for the flow to carry off and pull out of shape.
-  hoverFeel: 0.0,           // The sim force is OFF: it solves the pointer in seed units,
-                            // which after the mound's across-space remap are uMound.x/uMound.z
-                            // away from where the ray actually is — the force landed nowhere
-                            // near the cursor. The whole hover is the vertex-shader
-                            // displacement along the trail instead (same stamps, same
-                            // memory), driven by hoverPush below.
+  hoverFeel: 1.0,           // ver30's shipped value: the WHOLE hover is the simulation's
+                            // force, which integrates — a shove leaves momentum behind and
+                            // the trail's wake keeps travelling after the pointer leaves.
+                            // The cursorForce below now measures the pointer in WORLD units
+                            // (through moundWorld), which is the fix that makes this dial
+                            // usable here: the sim's seed units and the ray's space agreed
+                            // in ver30 and disagree after the mound's remap.
   hoverPush: 3.00,          // the client's panel value: a hard, immediate shove
 
   // The far end of the dial, stated as the thing that can be judged by looking: how long a
@@ -699,9 +700,7 @@ const CONFIG = {
   // the falloff does, and they heap up into a bright ring that stands there for as long as
   // the pointer does. A rotation has no divergence - it stirs the ink rather than sweeping
   // it into a pile, so there is nothing for a ring to be made of.
-  hoverSwirl: 0.88,         // 0 = all outward, which is ver13; 1 = all swirl. High: the
-                            // hover should mostly FLOW the particles around the pointer
-                            // (a stir you can see) rather than shove them radially out
+  hoverSwirl: 0.70,         // 0 = all outward, which is ver13; 1 = all swirl. ver30's value
 
   // The bloom, all three numbers read off the reference and all given per unit of the mass
   // radius so a resize does not have to re-derive them.
@@ -817,16 +816,11 @@ const CONFIG = {
                             //   resize
   mouseStrength: 0.075,     // ver30's value. Only read when hoverFeel < 1 — the displacement
                             // end of the dial, silent at the shipped setting
-  falloffPower: 2.2,        // 1 = linear, 2 = soft outer edge with a firm core. Back near
-                            // ver30's feel: the shove is decisive at the core so the
-                            // grains visibly part around the pointer, while the noise and
-                            // the swirl keep the boundary from reading as a circle
-  mouseSmoothing: 0.25,     // lag on the cursor the motes actually see, per frame. Low
-                            //   values make the cloud trail the pointer.
-  mouseFadeSeconds: 0.25,   // fade in/out of the whole response when the pointer arrives
-                            //   or leaves, so nothing snaps. Kept short: the hover is a
-                            //   displacement now, and with the old 0.45 the disturbance
-                            //   only fully formed a second after a flick — it read as dead.
+  falloffPower: 3.0,        // 1 = linear, 2 = soft outer edge with a firm core. ver30's value
+  mouseSmoothing: 0.10,     // lag on the cursor the motes actually see, per frame. Low
+                            //   values make the cloud trail the pointer. ver30's value.
+  mouseFadeSeconds: 0.45,   // fade in/out of the whole response when the pointer arrives
+                            //   or leaves, so nothing snaps. ver30's value.
   // How hard the cursor's edge is blurred. The push is bounded by a radius, and with one
   // radius for every mote that boundary is exact: motes stop being pushed at precisely that
   // distance and pile up just outside it, which draws a clean circle on the page. No falloff
@@ -845,12 +839,11 @@ const CONFIG = {
                             //   mouseRadius: this wants to give several lobes ACROSS the
                             //   opening, not one
 
-  mouseCurlBoost: 2.2,      // extra curl inside the push, as a multiple of the falloff.
-                            //   This is the "movement, not a hole" half of the hover: the
-                            //   dent stays shallow (worldPush is small) and this makes the
-                            //   particles CHURN visibly inside the reach instead — a pace
-                            //   change you can see, with no rim to read as a circle. Over
-                            //   ~3 it scatters motes back across the dent and closes it.
+  mouseCurlBoost: 0.0,      // ver30's value. Extra curl inside the push, as a multiple of the
+                            //   falloff. Zero: this and expandCurlBoost between them made
+                            //   the cloud visibly change PACE under the pointer, which reads
+                            //   as the effect being startled. The cursor may open a hole and
+                            //   grow the mass; it may not run the clock faster.
 
   // ------------------------------------------------------------ sphere shading
   // Each mote is a lit sphere, reconstructed per pixel on its billboard. These are the
@@ -1448,6 +1441,52 @@ vec3 advect(vec3 p, float dist, float outward) {
 }
 `;
 
+// ---------------------------------------------------------------- GLSL: the mound, shared
+// The bottom mound is ONE shape that two shaders need: the vertex shader builds it, and the
+// simulation's cursor force has to know where each grain sits ON SCREEN so the pointer's
+// reach can be measured where the eye sees it. (In ver30 the sim's units and the world's
+// were the same space; the mound's across-space remap pulls them apart here.) Both include
+// this chunk, so the two can never disagree about where a grain is.
+//
+// Expects the including shader to declare `uniform vec3 uMound; uniform float uPeakX;`
+// before it, and to have GLSL_SNOISE available.
+const MOUND_GLSL = /* glsl */`
+void moundState(float across, float shape, float time,
+                out float ridge, out float calm, out float edgeDrop, out float height,
+                out float fold, out float detail) {
+  float flowTime = time * 0.25; // slowed: the surface drifts at a lazy pace
+  vec3 flowPoint = vec3(across * 3.2, shape * 2.8, flowTime);
+  fold = snoise3dDeriv(flowPoint).w;
+  detail = snoise3dDeriv(flowPoint * 2.3 + vec3(7.0, 19.0, 3.0)).w;
+  // A TIGHT ridge, about one tab wide, so the mound reads as raised over the chosen tab.
+  ridge = exp(-pow(across - uPeakX, 2.0)
+              * (20.0 + 4.0 * sin(flowTime * 0.30 + shape * 6.2831)));
+  // The surface goes quiet about the SELECTED TAB — a calm zone wide enough to cover the
+  // whole mound, flanks included — so the noise cannot tilt the mass off the category.
+  calm = 1.0 - 0.85 * exp(-pow((across - uPeakX) * 2.8, 2.0));
+  // The layer lies LOW at the frame's borders and rises into the peak only about the
+  // selected category, so the silhouette is: thin base, distinct mountain, thin edges.
+  edgeDrop = 1.0 - 0.85 * smoothstep(0.72, 1.12, abs(across));
+  height = pow(shape, 1.35);
+}
+
+// A grain's position in LOCAL WORLD space — the space the pointer's ray and reach are
+// stated in. 'ay' returns the factor an offset in sim y maps through to world y, so a
+// force computed in world units can be divided back into sim units on the way out.
+vec3 moundWorld(vec3 s, float shape, out float ay) {
+  float across = s.x / uMound.z;
+  float ridge, calm, edgeDrop, height, fold, detail;
+  moundState(across, shape, uTime, ridge, calm, edgeDrop, height, fold, detail);
+  ay = 0.40 * edgeDrop * (0.35 + 0.65 * calm);
+  return vec3(
+    (across + fold * height * 0.08 * calm) * uMound.x,
+    height * uMound.y * (0.07 + 0.93 * ridge) * edgeDrop
+      * (1.0 + (fold * 0.38 + detail * 0.14) * calm)
+      + s.y * ay,
+    s.z);
+}
+`;
+
 // ---------------------------------------------------------------- GLSL: the simulation
 // One texel per particle. xyz is its OFFSET from its seat, w is its age in seconds; the
 // pass reads that, advances it by one frame of the field, and writes it back to the other
@@ -1501,6 +1540,11 @@ uniform float uSwirl;
 // matching entry of uStampD its ray direction. Weight 0 is an empty slot.
 uniform vec4  uStampO[${STAMP_SLOTS}];
 uniform vec3  uStampD[${STAMP_SLOTS}];
+uniform vec3  uMound;            // the mound's half-width, peak height, and seed radius —
+uniform float uPeakX;            // the selected category, in across-space. Both shared with
+                                 // the vertex shader so the cursor force can be measured in
+                                 // the space the eye sees.
+${MOUND_GLSL}
 uniform float uSettle;
 uniform float uDrag;
 uniform vec2  uSignHalf;         // the label's box, half-extents in this object's space
@@ -1580,20 +1624,27 @@ vec3 attractForce(vec3 p, vec3 target){
 //   the TRAIL, so the disturbance is a path with a history and not a spot;
 //   the WARP,  so no contour of it is a circle;
 //   the SWIRL, so it stirs rather than sweeping a rim up in front of itself.
-vec3 cursorForce(vec3 p, float shape){
+vec3 cursorForce(vec3 here, float shape){
   if (uPush < 0.001) return vec3(0.0);
+
+  // Where this grain actually is ON SCREEN — the mound rebuilt in world units. In ver30 the
+  // sim's units and the world's were the same space and the force could measure directly;
+  // the mound's across-space remap pulls them apart here, so every distance below is taken
+  // in the space the ray and the reach are stated in.
+  float ay;
+  vec3 wHere = moundWorld(here, shape, ay);
 
   // The warp and the two noises are read at the PARTICLE and read ONCE, not once per stamp.
   // The shape belongs to the space the pointer moves through, so it stays where it is while
   // the cursor travels over it; read per stamp it would ride along with the cursor, which is
   // the very thing being fixed. Creeping in its own z so it is never twice the same shape.
-  vec3 wq = p * (uMouseWarpScale / max(1e-4, uMouseRadius)) + vec3(0.0, 0.0, uTime * 0.12);
+  vec3 wq = wHere * (uMouseWarpScale / max(1e-4, uMouseRadius)) + vec3(0.0, 0.0, uTime * 0.12);
   vec3 warp = vec3(snoise3dDeriv(wq).w,
                    snoise3dDeriv(wq + vec3(19.0, 7.0, 31.0)).w,
                    snoise3dDeriv(wq + vec3(53.0, 23.0, 11.0)).w * 0.35);
-  vec3 wp = p + warp * (uMouseWarp * uMouseRadius);
+  vec3 wp = wHere + warp * (uMouseWarp * uMouseRadius);
 
-  vec3 np = p * uMouseNoiseScale + vec3(0.0, 0.0, uTime * 0.15);
+  vec3 np = wHere * uMouseNoiseScale + vec3(0.0, 0.0, uTime * 0.15);
   // strength, so parts of the reach are barely touched and parts are shoved hard
   float gain = max(0.0,
     1.0 + snoise3dDeriv(np * 1.7 + vec3(5.0, 61.0, 13.0)).w * uMouseNoise);
@@ -1629,7 +1680,11 @@ vec3 cursorForce(vec3 p, float shape){
     vec3 push = m / (length(m) + 1e-5);
     acc += vec3(push.x * cb - push.y * sb, push.x * sb + push.y * cb, push.z) * f;
   }
-  return acc * uPush;
+  // The force was measured in world units; the velocity it joins lives in sim units, where
+  // an offset maps to the screen through uMound.x/uMound.z across and through ~0.4 down —
+  // so the acceleration is divided by the same factors on the way out.
+  float ax = uMound.x / max(1e-5, uMound.z);
+  return vec3(acc.x / ax, acc.y / max(0.05, ay), acc.z) * uPush;
 }
 
 void main(){
@@ -1762,8 +1817,7 @@ uniform float uMouseEdgeBlur;
 uniform float uMouseNoise;
 uniform float uMouseNoiseScale;
 uniform float uMouseStrength;    // already scaled by the fade
-uniform float uJitter;           // per-grain position noise, multiple of the tuned look
-uniform float uJitterBase;       // local units per screen pixel — set by place()
+uniform float uFlowNoise;        // the organic surface noise, on the NOISE dial
 uniform float uSwirl;            // how much of the hover push turns around the trail
 uniform vec4  uStampO[${STAMP_SLOTS}];  // the pointer's trail: origin, age weight in w
 uniform vec3  uStampD[${STAMP_SLOTS}];  // and each stamp's direction
@@ -1776,6 +1830,7 @@ uniform vec3  uSignPoint;        // the label's centre and box, for the text's o
 uniform vec2  uSignHalf;
 uniform vec3  uMound;           // local half-width, peak height, and simulation seed radius
 uniform float uPeakX;           // the selected category, in the mound's across-space
+${MOUND_GLSL}                   // moundState() + moundWorld(), shared with the sim's force
 uniform float uSignInk;
 uniform float uCloudRadius;
 uniform float uParticleSize;
@@ -1835,46 +1890,21 @@ void main(){
   // This remaps the persistent simulation; neither selection nor travel re-seeds particles.
   float across = simPos.x / uMound.z;
   float flowTime = uTime * 0.25; // slowed 1.5x: the surface drifts at a lazy pace
-  vec3 flowPoint = vec3(across * 3.2, aShape * 2.8, flowTime);
-  float fold = snoise3dDeriv(flowPoint).w;
-  float detail = snoise3dDeriv(flowPoint * 2.3 + vec3(7.0, 19.0, 3.0)).w;
-  // The peak sits EXACTLY on the selected tab: uPeakX is the tab's centre and nothing
-  // wanders it, so the mountain always reads as centred on the category.
-  float peak = uPeakX;
-  // A TIGHT ridge, about one tab wide, so the mound reads as raised over the chosen tab.
-  float ridge = exp(-pow(across - peak, 2.0)
-                    * (20.0 + 4.0 * sin(flowTime * 0.30 + aShape * 6.2831)));
-  // The surface goes quiet about the SELECTED TAB — a calm zone wide enough to cover the
-  // whole mound, flanks included — so the noise cannot tilt the mass off the category.
-  // Away from the tab the noise returns in full.
-  float calm = 1.0 - 0.85 * exp(-pow((across - uPeakX) * 2.8, 2.0));
-  float height = pow(aShape, 1.35);
-  // The layer lies LOW at the frame's borders and rises into the peak only about the
-  // selected category, so the silhouette is: thin base, distinct mountain, thin edges.
-  float edgeDrop = 1.0 - 0.85 * smoothstep(0.72, 1.12, abs(across));
-  pos.x = (across + fold * height * 0.08 * calm) * uMound.x;
+  float ridge, calm, edgeDrop, height, fold, detail;
+  moundState(across, aShape, uTime, ridge, calm, edgeDrop, height, fold, detail);
+  // The organic surface noise, on the client's NOISE dial. This is the same field family
+  // the simulation's velocity carries — curl-and-gradient noise, coherent across space and
+  // drifting in time — so turning it up makes the mound breathe and ripple like the flow
+  // does, rather than turning into grain-level static. (An earlier attempt jittered each
+  // grain on its own random seed; it read as fuzz, not as fluid, and is gone.)
+  pos.x = (across + fold * height * 0.08 * calm * uFlowNoise) * uMound.x;
   pos.y = height * uMound.y * (0.07 + 0.93 * ridge) * edgeDrop
-        * (1.0 + (fold * 0.38 + detail * 0.14) * calm)
+        * (1.0 + (fold * 0.38 + detail * 0.14) * calm * uFlowNoise)
         + simPos.y * 0.40 * edgeDrop * (0.35 + 0.65 * calm);
   // A slow private bob on top, so a grain at rest is still travelling — the tallest
-  // column moves most and the floor barely at all.
-  pos.y += uMound.y * (0.012 + 0.05 * ridge) * edgeDrop * calm
+  // column moves most and the floor barely at all. Scaled by the same dial.
+  pos.y += uMound.y * (0.012 + 0.05 * ridge) * edgeDrop * calm * uFlowNoise
          * sin(flowTime * (0.35 + aShape * 0.8) + aShape * 40.0);
-
-  // A per-grain noisy wander on top of the mound. The mound and the field agree too well —
-  // neighbours ride the same ridges in lockstep and the silhouette holds still, which reads
-  // as a shape rather than a swarm. This gives every grain its own two-octave drift seeded
-  // from aShape, so neighbours part and re-form while the overall outline holds. The clock
-  // is uTime, not flowTime, so the wobble stays visible even at the slowest speed dial.
-  // Amplitudes are in SCREEN units (uJitterBase converts): 3% of the frame height across,
-  // 1.2% of it vertically, at the dial's 1.0. Damped but never removed at the crest: the
-  // peak stays ON the tab, it just breathes.
-  vec3 jp = vec3(aShape * 53.0, aShape * 29.0, uTime * 2.0);
-  float j1 = snoise3dDeriv(jp).w;
-  float j2 = snoise3dDeriv(jp * 2.7 + vec3(11.0, 5.0, 23.0)).w;
-  float jitter = 0.35 + 0.65 * calm;
-  pos.x += (j1 * 0.8 + j2 * 0.4) * uJitterBase * 0.030 * jitter * uJitter;
-  pos.y += (j1 * 0.5 + j2 * 0.6) * uJitterBase * 0.012 * jitter * uJitter;
 
   // ---- 1b. bloom out of the corner on hover ---------------------------------
   // Applied to the resting seat, before curl and push, so the two cursor responses
@@ -1899,9 +1929,15 @@ void main(){
   // force solved in there lands nowhere near the pointer. Here the ray and the mound are
   // the same space, so the reach means what the dial says.
   float pushFalloff = 0.0;
-  vec3  pushAcc = vec3(0.0);
+  vec3  pushDir = vec3(0.0);
   float rayLen = length(uMouseRayDir);
   if (rayLen > 0.001 && uMouseStrength > 0.001) {
+    vec3 rayDir = uMouseRayDir / rayLen;
+    vec3 toParticle = pos - uMouseRayOrigin;
+    float t = dot(toParticle, rayDir);
+    vec3 closest = uMouseRayOrigin + rayDir * t;
+    vec3 delta = pos - closest;
+    float distToRay = length(delta);
     // this mote's own radius. aShape is already a per-mote random and already travels
     // through the depth sort, so it doubles as the seed; its other use is the outline in the
     // fragment shader, and a mote's outline correlating with its push radius is not
@@ -1928,27 +1964,16 @@ void main(){
     vec3 np = pos * uMouseNoiseScale + vec3(0.0, 0.0, uTime * 0.15);
     float wob = snoise3dDeriv(np).w
               + snoise3dDeriv(np * 2.7 + vec3(31.0, 7.0, 19.0)).w * 0.5;
-    // every stamp still alive pushes on its own; the sum is the hole the pointer has
-    // dragged through the cloud, which stays open behind it and eases shut as the
-    // stamps decay — the same memory the sim force used to carry.
-    for (int i = 0; i < ${STAMP_SLOTS}; i++) {
-      float wgt = uStampO[i].w;
-      if (wgt <= 0.002) continue;
-      vec3 toStamp = pos - uStampO[i].xyz;
-      float t = dot(toStamp, uStampD[i]);
-      vec3 closest = uStampO[i].xyz + uStampD[i] * t;
-      vec3 delta = pos - closest;
-      float distToRay = length(delta);
-      float mr = uMouseRadius
-               * max(0.05, 1.0 + (aShape - 0.5) * 2.0 * uMouseEdgeBlur + wob * uMouseNoise);
-      if (distToRay < mr) {
-        float f = pow(1.0 - distToRay / mr, uFalloffPower) * wgt;
-        pushFalloff = max(pushFalloff, f);
-        vec3 radial = delta / (distToRay + 1e-4);
-        vec3 tangent = cross(uStampD[i], radial);
-        vec3 m = mix(radial, tangent, uSwirl);
-        pushAcc += (m / (length(m) + 1e-5)) * f;
-      }
+    float mr = uMouseRadius
+             * max(0.05, 1.0 + (aShape - 0.5) * 2.0 * uMouseEdgeBlur + wob * uMouseNoise);
+    if (distToRay < mr) {
+      pushFalloff = pow(1.0 - distToRay / mr, uFalloffPower);
+      pushFalloff *= max(0.0,
+        1.0 + snoise3dDeriv(np * 1.7 + vec3(5.0, 61.0, 13.0)).w * uMouseNoise);
+      float bend = snoise3dDeriv(np * 1.3 + vec3(47.0, 3.0, 29.0)).w * uMouseNoise * 1.6;
+      float cb = cos(bend), sb = sin(bend);
+      vec3 turned = vec3(delta.x * cb - delta.y * sb, delta.x * sb + delta.y * cb, delta.z);
+      pushDir = turned / (length(turned) + 1e-4);
     }
   }
 
@@ -1978,30 +2003,15 @@ void main(){
     pos.z += curlOffset.z * 0.1 * curlInfluence;
   }
 
-  // The cursor's STIR — the visible half of the hover now that the dent is kept shallow.
-  // Two things the block above cannot give it: a fast clock (the base field crawls at
-  // uTime * uCurlSpeed * 0.01, far too lethargic for a stir to read as movement at the slow
-  // speed dial) and a per-grain phase (aShape), so neighbours sample different slices and
-  // the cloud roils instead of swaying. Riding the same soft falloff as the dent, it swirls
-  // the grains around the pointer and lets them re-form — motion, with no rim to read as a
-  // carved circle.
-  float mouseChurn = aCurlResp * pushFalloff * uMouseCurlBoost;
-  if (mouseChurn > 0.001) {
-    float ctf = uTime * 2.5 + aShape * 11.0;
-    // the amplitude is given as frequency × 10 so the returned field is ~10 local units of
-    // travel — real, visible grains of motion, independent of the curl frequency
-    float stirFreq = uCurlFrequency * 1.7;
-    vec3 stir = curlNoise(vec3(pos.x, pos.y, ctf), stirFreq, ctf,
-                          stirFreq * 10.0, uCurlDivergence);
-    pos.x += stir.x * mouseChurn;
-    pos.y += stir.y * mouseChurn;
-    pos.z += stir.z * 0.1 * mouseChurn;
-  }
-
-  // The OLD hover's displacement, now carrying the trail's whole push. A bounded
-  // DISPLACEMENT: the hole appears the instant the pointer arrives, at a fixed size, and
-  // holds; the stamps' own decay is the ease on the way out.
-  pos += pushAcc * uMouseStrength;
+  // The OLD hover's displacement, kept because it is one end of the hoverFeel dial and
+  // cannot be imitated by the force. A bounded DISPLACEMENT: the hole appears the instant
+  // the pointer arrives, at a fixed size, and holds. The force in the simulation integrates
+  // instead, so its wake keeps moving for as long as you stir and eases shut afterwards — a
+  // different behaviour, not a slower version of the same one.
+  //
+  // uMouseStrength carries (1 - hoverFeel), so at feel 1 this is silent and the simulation's
+  // force has it all — which is where the dial is set.
+  pos += pushDir * pushFalloff * uMouseStrength;
 
   vPos = pos;
   // Depth is taken in VIEW space so it stays correct while the volume yaws — a local z
@@ -3906,6 +3916,12 @@ function buildParticles(count) {
     seedData[i * 4 + 1] = initPos[i * 3 + 1];
     seedData[i * 4 + 2] = initPos[i * 3 + 2];
     seedData[i * 4 + 3] = span;
+    // aShape MUST be the sim's own per-grain random, fract(seed.w * 7.31), or the two
+    // shaders disagree about a grain: cursorForce and moundWorld both key their shape term
+    // (the mound's height, the cursor's reach blur) off it. The sim reads it from the seed
+    // texture, the vertex from this attribute — so it is derived here from the same span
+    // that was just written into the seed, overwriting the plain Math.random() above.
+    shapes[i] = (span * 7.31) % 1.0;
   }
   inst('aSimUv', simUv, 2);
   inst('aLifeSpan', lifeSpan, 1);
@@ -4001,8 +4017,7 @@ const uniforms = {
   uViewportPx: { value: 1 },
   uMound: { value: new THREE.Vector3(1, 1, 1) },
   uPeakX: { value: 0 },
-  uJitter: { value: CONFIG.jitterAmount },
-  uJitterBase: { value: 1 },
+  uFlowNoise: { value: CONFIG.flowNoise },
   uMinPx: { value: CONFIG.minPx },
   uGrainAxis: { value: new THREE.Vector2(1, 0) },
   uGrainStretch: { value: CONFIG.grainStretch },
@@ -4095,7 +4110,7 @@ let mesh = new THREE.Mesh(buildParticles(CONFIG.particleCount), material);
 mesh.frustumCulled = false;
 // A console/debug handle: lets a test harness (or the browser console) read the live
 // uniform and config values without reaching into the module.
-window.__ptsDebug = { uniforms, CONFIG };
+window.__ptsDebug = { uniforms, CONFIG, get sim() { return sim; }, renderer };
 group.add(mesh);
 
 // ---------------------------------------------------------------- the simulation
@@ -4177,6 +4192,10 @@ function makeSim() {
       // array it is handed, so replacing it would leave the material reading the old one
       uStampO: { value: stampO },
       uStampD: { value: stampD },
+      // shared with the main material's vertex shader, so the cursor force can rebuild the
+      // mound in world units and measure the pointer where the eye sees it
+      uMound: { value: new THREE.Vector3(1, 1, 1) },
+      uPeakX: { value: 0 },
       uSettle: { value: CONFIG.settle },
       uDrag: { value: CONFIG.drag },
       // the label's pull. The point is written by place(), which is where the frame — and
@@ -4359,6 +4378,10 @@ function stepSim(dt) {
   u.uSwirl.value = THREE.MathUtils.clamp(CONFIG.hoverSwirl, 0, 1);
   // the main material's vertex hover reads its own copy of the same dial
   uniforms.uSwirl.value = u.uSwirl.value;
+  // the mound's own numbers, so the force can rebuild a grain's world position — the sim
+  // works in seed units, the pointer's ray and reach are stated in world units
+  u.uMound.value.copy(uniforms.uMound.value);
+  u.uPeakX.value = uniforms.uPeakX.value;
   // the pointer ray is already converted into the cloud's own space for the vertex shader
   u.uMouseRayOrigin.value.copy(uniforms.uMouseRayOrigin.value);
   u.uMouseRayDir.value.copy(uniforms.uMouseRayDir.value);
@@ -4725,9 +4748,6 @@ function place() {
   // and the force that carries them there can never disagree.
   const peakAcross = ((x - 0.5) * vw / group.scale.x) / uniforms.uMound.value.x;
   uniforms.uPeakX.value = peakAcross;
-  // local units per screen pixel, for anything in the shaders that wants to size itself in
-  // screen units (the per-grain position noise does)
-  uniforms.uJitterBase.value = ppw * group.scale.x;
   // Holding the anchor still under a magnification of z is exactly dividing its world
   // position by z: the projection scales x and y by z at a fixed depth, so the two cancel and
   // the cloud keeps its place on screen while its contents still grow.
@@ -4743,13 +4763,11 @@ function place() {
   // hover reached massScale times further than the number says, which it has been doing
   // quietly since the scale control was added.
   uniforms.uMouseRadius.value = (CONFIG.mouseRadius * vh) / group.scale.x;
-  // The hover's visible strength is the vertex displacement now, and it is driven by the
-  // HOVER PUSH dial: push × reach × frame height, so a wider reach also stirs further and
-  // the number still means the same thing at any screen size. The scale is back at ver30's
-  // decisiveness (0.30): the shove must part the grains the way the sim force used to, and
-  // the trail's own exponential decay is what eases it away afterwards. Divided by the
-  // group's scale, like the reach above, because the ray lives in the group's local space.
-  worldPush = CONFIG.hoverPush * CONFIG.mouseRadius * vh * 0.30 / group.scale.x;
+  // The hover's vertex-displacement end of the dial, ver30's semantics: the strength is
+  // mouseStrength (a fraction of the frame height), divided by the group's scale because
+  // the ray lives in the group's local space. At the shipped hoverFeel of 1 this is
+  // multiplied to zero and the simulation's force carries the whole hover.
+  worldPush = CONFIG.mouseStrength * vh / group.scale.x;
 
   // The bloom grows the cloud away from the SCREEN CORNER, so the origin is that corner
   // expressed in the group's own space — not the group's origin, which is only wherever
@@ -4901,9 +4919,10 @@ function updateCursor(dt) {
 
   uniforms.uMouseRayOrigin.value.copy(localOrigin);
   uniforms.uMouseRayDir.value.copy(seenPointer ? localDir : new THREE.Vector3());
-  // the whole hover is the vertex displacement now (hoverFeel is 0 and the sim force with
-  // it), so the strength is just the dial's shove, eased in and out by the fade
-  uniforms.uMouseStrength.value = worldPush * fade;
+  // ver30's crossfade: the vertex displacement gets (1 - feel) of the push, the simulation's
+  // force the rest. At the shipped hoverFeel of 1 the displacement is silent.
+  uniforms.uMouseStrength.value =
+    worldPush * fade * (1 - THREE.MathUtils.clamp(CONFIG.hoverFeel, 0, 1));
 
   // The force reads the trail rather than the live ray, so it is laid here and not in
   // stepSim: this is where the pointer has already been put into the cloud's own space.
@@ -5133,11 +5152,11 @@ if (uiEl && PARAMS.get('ui') !== '1') {
     { key: 'speed', name: 'speed', cst: 'CONFIG.speed',
       min: 0, max: 1.5, step: 0.05, value: CONFIG.speed,
       text: () => CONFIG.speed.toFixed(2) },
-    // How noisy each grain's position wander is, as a multiple of the tuned look. Lives on
-    // the material as a plain uniform, so it drags live like the speed dial.
-    { key: 'jitterAmount', name: 'noise', cst: 'CONFIG.jitterAmount',
-      min: 0, max: 3, step: 0.05, value: CONFIG.jitterAmount,
-      uni: 'uJitter', text: () => CONFIG.jitterAmount.toFixed(2) },
+    // The organic surface noise, as a multiple of the tuned look. Lives on the material as
+    // a plain uniform, so it drags live like the speed dial.
+    { key: 'flowNoise', name: 'noise', cst: 'CONFIG.flowNoise',
+      min: 0, max: 3, step: 0.05, value: CONFIG.flowNoise,
+      uni: 'uFlowNoise', text: () => CONFIG.flowNoise.toFixed(2) },
     // The three basic hover dials: how far the reach extends, how hard the trail's force
     // drives the grains, and how much the cloud blooms when the pointer comes near.
     // reach and push are re-read from CONFIG every frame (place() and stepSim); the bloom
