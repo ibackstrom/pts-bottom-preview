@@ -1678,7 +1678,12 @@ void main(){
   vec2 seatQ = abs(seed.xy - uAttractPoint.xy) / max(uSignHalf, vec2(1e-5));
   float mine = 1.0 - smoothstep(1.0, 1.35, max(seatQ.x, seatQ.y));
 
-  vec3 target = fieldVelocity(here) + birthImpulse(here, age) + vec3(0.0, -uGravity, 0.0);
+  // The field is damped in a zone about the migration target, so the gathered mass over
+  // the tab sits still and centred instead of being pushed about — or pushed sideways by
+  // the flow's own lean — by the churn. Outside the zone the field runs at full strength.
+  float nearCore = exp(-pow(length(offset.xy - vec2(uMigrateX, 0.0)) / (0.25 * uAttractRadius), 2.0));
+  vec3 target = fieldVelocity(here) * (1.0 - 0.90 * nearCore)
+              + birthImpulse(here, age) + vec3(0.0, -uGravity, 0.0);
   v += (target - v) * clamp(uSettle, 0.0, 1.0);
   v += cursorForce(here, fract(seed.w * 7.31)) * uDt * mix(1.0, uSignShield, mine);
   // The migration. The pull's target is each grain's own SEAT displaced to the selected
@@ -1814,22 +1819,21 @@ void main(){
   vec3 flowPoint = vec3(across * 3.2, aShape * 2.8, flowTime);
   float fold = snoise3dDeriv(flowPoint).w;
   float detail = snoise3dDeriv(flowPoint * 2.3 + vec3(7.0, 19.0, 3.0)).w;
-  // The peak is no longer welded to the emitter's origin: uPeakX carries the selected
-  // category, and it wanders only gently about that target, so the silhouette stays put
-  // over its own tab.
-  float peak = uPeakX + 0.03 * sin(flowTime * 0.50) + fold * 0.03;
-  // A TIGHT ridge: the tabs sit only about 0.12 apart in across units, so a broad mound
-  // reaches under the neighbours. This one spans about a quarter of a tab gap.
+  // The peak sits EXACTLY on the selected tab: uPeakX is the tab's centre and nothing
+  // wanders it, so the mountain always reads as centred on the category.
+  float peak = uPeakX;
+  // A TIGHT ridge, about one tab wide, so the mound reads as raised over the chosen tab.
   float ridge = exp(-pow(across - peak, 2.0)
-                    * (14.0 + 4.0 * sin(flowTime * 0.30 + aShape * 6.2831)));
-  // The surface goes quiet where it rises: three quarters of the noise folds away at the
-  // peak, so the mass over the tab reads as one concentrated column instead of churn.
-  float calm = 1.0 - 0.75 * ridge;
+                    * (20.0 + 4.0 * sin(flowTime * 0.30 + aShape * 6.2831)));
+  // The surface goes quiet about the SELECTED TAB — a calm zone wide enough to cover the
+  // whole mound, flanks included — so the noise cannot tilt the mass off the category.
+  // Away from the tab the noise returns in full.
+  float calm = 1.0 - 0.85 * exp(-pow((across - uPeakX) * 2.8, 2.0));
   float height = pow(aShape, 1.35);
   // The layer lies LOW at the frame's borders and rises into the peak only about the
   // selected category, so the silhouette is: thin base, distinct mountain, thin edges.
   float edgeDrop = 1.0 - 0.85 * smoothstep(0.72, 1.12, abs(across));
-  pos.x = (across + fold * height * 0.12 * calm) * uMound.x;
+  pos.x = (across + fold * height * 0.08 * calm) * uMound.x;
   pos.y = height * uMound.y * (0.07 + 0.93 * ridge) * edgeDrop
         * (1.0 + (fold * 0.38 + detail * 0.14) * calm)
         + simPos.y * 0.40 * edgeDrop * (0.35 + 0.65 * calm);
@@ -5051,7 +5055,7 @@ if (uiEl && PARAMS.get('ui') !== '1') {
     // drives the grains, and how much the cloud blooms when the pointer comes near.
     // reach and push are re-read from CONFIG every frame (place() and stepSim); the bloom
     // lives on the material, so its uniform is pointed at the same value here.
-    { key: 'mouseRadius', name: 'hover reach', cst: 'CONFIG.mouseRadius',
+    { key: 'mouseRadius', name: 'hover radius', cst: 'CONFIG.mouseRadius',
       min: 0.02, max: 0.60, step: 0.005, value: CONFIG.mouseRadius,
       place: true, text: () => CONFIG.mouseRadius.toFixed(3) },
     { key: 'hoverPush', name: 'hover push', cst: 'CONFIG.hoverPush',
