@@ -467,6 +467,12 @@ const CONFIG = {
                             //   the motion was asked for slower: it scales the whole clock,
                             //   so the drift, the bloom and the birth-to-death all slow
                             //   together and the character of the motion survives it.
+  jitterAmount: 1.0,        // the client's panel value: how noisy each grain's own position
+                            //   wander is, as a multiple of the tuned look (1.0 = up to 3%
+                            //   of the frame height across, 1.2% vertically). The mound
+                            //   reads "too much like a shape" when this is low — the grains
+                            //   ride the ridges in lockstep — and falls apart into static
+                            //   at high settings. 0 is the clean mound.
 
   // ------------------------------------------------------------ parallax
   // A slow sway of the whole volume. With a fixed camera this is the only thing that
@@ -811,10 +817,10 @@ const CONFIG = {
                             //   resize
   mouseStrength: 0.075,     // ver30's value. Only read when hoverFeel < 1 — the displacement
                             // end of the dial, silent at the shipped setting
-  falloffPower: 1.3,        // 1 = linear, 2 = soft outer edge with a firm core. LOW on
-                            // purpose: the client wants the hover to stir the particles,
-                            // not carve a hard-rimmed hole — at 3.0 the push held near
-                            // full strength to the rim and the boundary read as a circle
+  falloffPower: 2.2,        // 1 = linear, 2 = soft outer edge with a firm core. Back near
+                            // ver30's feel: the shove is decisive at the core so the
+                            // grains visibly part around the pointer, while the noise and
+                            // the swirl keep the boundary from reading as a circle
   mouseSmoothing: 0.25,     // lag on the cursor the motes actually see, per frame. Low
                             //   values make the cloud trail the pointer.
   mouseFadeSeconds: 0.25,   // fade in/out of the whole response when the pointer arrives
@@ -1756,6 +1762,8 @@ uniform float uMouseEdgeBlur;
 uniform float uMouseNoise;
 uniform float uMouseNoiseScale;
 uniform float uMouseStrength;    // already scaled by the fade
+uniform float uJitter;           // per-grain position noise, multiple of the tuned look
+uniform float uJitterBase;       // local units per screen pixel — set by place()
 uniform float uSwirl;            // how much of the hover push turns around the trail
 uniform vec4  uStampO[${STAMP_SLOTS}];  // the pointer's trail: origin, age weight in w
 uniform vec3  uStampD[${STAMP_SLOTS}];  // and each stamp's direction
@@ -1858,13 +1866,15 @@ void main(){
   // as a shape rather than a swarm. This gives every grain its own two-octave drift seeded
   // from aShape, so neighbours part and re-form while the overall outline holds. The clock
   // is uTime, not flowTime, so the wobble stays visible even at the slowest speed dial.
-  // Damped but never removed at the crest: the peak stays ON the tab, it just breathes.
+  // Amplitudes are in SCREEN units (uJitterBase converts): 3% of the frame height across,
+  // 1.2% of it vertically, at the dial's 1.0. Damped but never removed at the crest: the
+  // peak stays ON the tab, it just breathes.
   vec3 jp = vec3(aShape * 53.0, aShape * 29.0, uTime * 2.0);
   float j1 = snoise3dDeriv(jp).w;
   float j2 = snoise3dDeriv(jp * 2.7 + vec3(11.0, 5.0, 23.0)).w;
   float jitter = 0.35 + 0.65 * calm;
-  pos.x += (j1 * 0.8 + j2 * 0.4) * uMound.x * 0.014 * jitter;
-  pos.y += (j1 * 0.5 + j2 * 0.6) * uMound.y * 0.050 * jitter;
+  pos.x += (j1 * 0.8 + j2 * 0.4) * uJitterBase * 0.030 * jitter * uJitter;
+  pos.y += (j1 * 0.5 + j2 * 0.6) * uJitterBase * 0.012 * jitter * uJitter;
 
   // ---- 1b. bloom out of the corner on hover ---------------------------------
   // Applied to the resting seat, before curl and push, so the two cursor responses
@@ -3990,7 +4000,9 @@ const uniforms = {
   uSpecFullPx: { value: CONFIG.specFullPx },
   uViewportPx: { value: 1 },
   uMound: { value: new THREE.Vector3(1, 1, 1) },
-uPeakX: { value: 0 },
+  uPeakX: { value: 0 },
+  uJitter: { value: CONFIG.jitterAmount },
+  uJitterBase: { value: 1 },
   uMinPx: { value: CONFIG.minPx },
   uGrainAxis: { value: new THREE.Vector2(1, 0) },
   uGrainStretch: { value: CONFIG.grainStretch },
@@ -4081,6 +4093,9 @@ if (PARAMS.has('count')) {
 
 let mesh = new THREE.Mesh(buildParticles(CONFIG.particleCount), material);
 mesh.frustumCulled = false;
+// A console/debug handle: lets a test harness (or the browser console) read the live
+// uniform and config values without reaching into the module.
+window.__ptsDebug = { uniforms, CONFIG };
 group.add(mesh);
 
 // ---------------------------------------------------------------- the simulation
@@ -4710,6 +4725,9 @@ function place() {
   // and the force that carries them there can never disagree.
   const peakAcross = ((x - 0.5) * vw / group.scale.x) / uniforms.uMound.value.x;
   uniforms.uPeakX.value = peakAcross;
+  // local units per screen pixel, for anything in the shaders that wants to size itself in
+  // screen units (the per-grain position noise does)
+  uniforms.uJitterBase.value = ppw * group.scale.x;
   // Holding the anchor still under a magnification of z is exactly dividing its world
   // position by z: the projection scales x and y by z at a fixed depth, so the two cancel and
   // the cloud keeps its place on screen while its contents still grow.
@@ -4727,12 +4745,11 @@ function place() {
   uniforms.uMouseRadius.value = (CONFIG.mouseRadius * vh) / group.scale.x;
   // The hover's visible strength is the vertex displacement now, and it is driven by the
   // HOVER PUSH dial: push × reach × frame height, so a wider reach also stirs further and
-  // the number still means the same thing at any screen size. The scale is small (0.10) on
-  // purpose: the client asked for a hover WITHOUT a strong carved radius — the dent only
-  // dents softly now, and the visible response is the churn (mouseCurlBoost) inside the
-  // reach. Divided by the group's scale, like the reach above, because the ray lives in
-  // the group's local space.
-  worldPush = CONFIG.hoverPush * CONFIG.mouseRadius * vh * 0.10 / group.scale.x;
+  // the number still means the same thing at any screen size. The scale is back at ver30's
+  // decisiveness (0.30): the shove must part the grains the way the sim force used to, and
+  // the trail's own exponential decay is what eases it away afterwards. Divided by the
+  // group's scale, like the reach above, because the ray lives in the group's local space.
+  worldPush = CONFIG.hoverPush * CONFIG.mouseRadius * vh * 0.30 / group.scale.x;
 
   // The bloom grows the cloud away from the SCREEN CORNER, so the origin is that corner
   // expressed in the group's own space — not the group's origin, which is only wherever
@@ -5116,6 +5133,11 @@ if (uiEl && PARAMS.get('ui') !== '1') {
     { key: 'speed', name: 'speed', cst: 'CONFIG.speed',
       min: 0, max: 1.5, step: 0.05, value: CONFIG.speed,
       text: () => CONFIG.speed.toFixed(2) },
+    // How noisy each grain's position wander is, as a multiple of the tuned look. Lives on
+    // the material as a plain uniform, so it drags live like the speed dial.
+    { key: 'jitterAmount', name: 'noise', cst: 'CONFIG.jitterAmount',
+      min: 0, max: 3, step: 0.05, value: CONFIG.jitterAmount,
+      uni: 'uJitter', text: () => CONFIG.jitterAmount.toFixed(2) },
     // The three basic hover dials: how far the reach extends, how hard the trail's force
     // drives the grains, and how much the cloud blooms when the pointer comes near.
     // reach and push are re-read from CONFIG every frame (place() and stepSim); the bloom
