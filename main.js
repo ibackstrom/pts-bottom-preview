@@ -540,10 +540,9 @@ const CONFIG = {
   // small numbers, so the buffer keeps its precision where it is needed — and on a device
   // that will only give us half floats, an absolute position's smallest representable step
   // is larger than one frame's movement and the cloud would simply never start.
-  simSpeed: 0.15,           // Raised from the client's 0.118: with the emitter anchored the
-                            // field's own churn is the only thing moving the grains inside
-                            // the mound, so it has to be visible on its own — a grain should
-                            // visibly wander its thread, not sit pinned to it
+  simSpeed: 0.085,          // Slowed hard on the client's request: the churn inside the
+                            // mound should read as a slow breathing, not a simmer. The
+                            // field's own drift is the only thing moving grains at rest
   // Also the leash. The seeds sit AT the corner, but a particle wanders further the longer
   // it lives, and it can only wander one way — inward, because the corner is a boundary and
   // there is nothing on the other side of it to wander into. So a long life does not just
@@ -566,9 +565,8 @@ const CONFIG = {
                             //   octave is the macro swirl and the x3.1 one below carries the
                             //   filament detail. From the reference:
                             //   its field decorrelates over 13-20% of the mass radius
-  simFieldSpeed: 0.62,      // how fast the field itself changes. Raised from 0.53 with
-                            // simSpeed: the churn has to read as living, and the wisps
-                            // crossing the mound are what carry that now
+  simFieldSpeed: 0.42,      // Slowed with simSpeed so the wisps cross the mound lazily;
+                            // the two were raised together and come down together
   simDivergence: 0.75,      // the spreading half of the field — see curlNoise. Held under 1
                             //   so the field turns more than it spreads: the first clip's
                             //   look is curling ink, not a burst opening out
@@ -737,12 +735,12 @@ const CONFIG = {
   // Stated as a speed, the same way the cursor's push is: a fraction of the mass radius per
   // second, with the force solved back out of it through the same gain, so the number means
   // one thing whatever the inertia is set to.
-  attractPull: 0.10,        // 0 turns it off. This is the migration engine now: the speed a
-                            // grain's journey settles at, so 0.10 crosses the whole menu in
-                            // roughly four seconds — slow enough to read as rolling
+  attractPull: 0.075,       // 0 turns it off. This is the migration engine now: the speed a
+                            // grain's journey settles at, so 0.075 crosses the whole menu in
+                            // six seconds or so — the client asked for a slow, readable roll
   attractRadius: 0.34,      // superseded: place() sizes the reach from the menu span, so
                             //   a grain at the far end still feels the new category
-  attractCore: 0.20,        // as a fraction of the reach. INSIDE this the pull eases off to
+  attractCore: 0.15,        // as a fraction of the reach. INSIDE this the pull eases off to
                             //   nothing, which is what makes it gather rather than collapse:
                             //   a force that keeps pulling all the way to the centre packs
                             //   every mote it catches into one point and the sign ends up
@@ -1813,30 +1811,30 @@ void main(){
   // Spread the carried grains along the floor, lifting the centre into a soft mountain.
   // This remaps the persistent simulation; neither selection nor travel re-seeds particles.
   float across = simPos.x / uMound.z;
-  float flowTime = uTime * 0.65;
+  float flowTime = uTime * 0.38; // slowed: the surface drifts at roughly half its old pace
   vec3 flowPoint = vec3(across * 3.2, aShape * 2.8, flowTime);
   float fold = snoise3dDeriv(flowPoint).w;
   float detail = snoise3dDeriv(flowPoint * 2.3 + vec3(7.0, 19.0, 3.0)).w;
   // The peak is no longer welded to the emitter's origin: uPeakX carries the selected
-  // category, and it wanders about that target on the same noise the surface is made of,
-  // so the silhouette never reads as a fixed shape parked on the menu.
-  float peak = uPeakX + 0.05 * sin(flowTime * 0.55) + fold * 0.07;
-  // Each grain's own ridge width, phased off its seed: at one shared width the whole
-  // population breathed in unison, which is the static look this replaces.
+  // category, and it wanders gently about that target on the same noise the surface is
+  // made of, so the silhouette never reads as a fixed shape parked on the menu.
+  float peak = uPeakX + 0.04 * sin(flowTime * 0.50) + fold * 0.05;
+  // Each grain's own ridge width, phased off its seed — but TIGHT: the mound has to read
+  // as a distinct mountain over the chosen tab, not a broad swell.
   float ridge = exp(-pow(across - peak, 2.0)
-                    * (3.2 + 1.4 * sin(flowTime * 0.42 + aShape * 6.2831)));
+                    * (7.0 + 2.5 * sin(flowTime * 0.30 + aShape * 6.2831)));
   float height = pow(aShape, 1.35);
-  // Coherent noise deforms the surface, and the grains stream THROUGH it: the fold moves
-  // each grain along the mound's own axis, the detail roughens the height, and the
-  // simulated offsets carry the slower churn underneath.
-  pos.x = (across + fold * height * 0.16) * uMound.x;
-  pos.y = height * uMound.y * (0.10 + 0.90 * ridge)
-        * (1.0 + fold * 0.55 + detail * 0.20)
-        + simPos.y * 0.40;
+  // The layer lies LOW at the frame's borders and rises into the peak only about the
+  // selected category, so the silhouette is: thin base, distinct mountain, thin edges.
+  float edgeDrop = 1.0 - 0.85 * smoothstep(0.72, 1.12, abs(across));
+  pos.x = (across + fold * height * 0.12) * uMound.x;
+  pos.y = height * uMound.y * (0.07 + 0.93 * ridge) * edgeDrop
+        * (1.0 + fold * 0.38 + detail * 0.14)
+        + simPos.y * 0.40 * edgeDrop;
   // A slow private bob on top, so a grain at rest is still travelling — the tallest
   // column moves most and the floor barely at all.
-  pos.y += uMound.y * (0.012 + 0.05 * ridge)
-         * sin(flowTime * (0.5 + aShape * 1.1) + aShape * 40.0);
+  pos.y += uMound.y * (0.012 + 0.05 * ridge) * edgeDrop
+         * sin(flowTime * (0.35 + aShape * 0.8) + aShape * 40.0);
 
   // ---- 1b. bloom out of the corner on hover ---------------------------------
   // Applied to the resting seat, before curl and push, so the two cursor responses
@@ -4017,6 +4015,15 @@ const material = new THREE.ShaderMaterial({
   blending: THREE.NormalBlending,
 });
 
+// A ?count= override, so a shareable link can carry its own population without the panel.
+// Clamped to what the buffers can plausibly hold; anything unusable falls back to CONFIG.
+if (PARAMS.has('count')) {
+  const asked = Math.round(parseFloat(PARAMS.get('count')));
+  if (Number.isFinite(asked)) {
+    CONFIG.particleCount = Math.max(20000, Math.min(800000, asked));
+  }
+}
+
 let mesh = new THREE.Mesh(buildParticles(CONFIG.particleCount), material);
 mesh.frustumCulled = false;
 group.add(mesh);
@@ -4990,6 +4997,7 @@ const uiEl = document.getElementById('pui');
 if (uiEl && PARAMS.get('ui') !== '1') {
   uiEl.remove();
 } else if (uiEl) {
+  uiEl.hidden = false; // the markup ships hidden so nothing flashes before main.js decides
   // Colour. Every particle carries the same colour now — the tone in the picture is how many
   // of them overlap, not what any one of them is — so hue, saturation and lightness are one
   // colour rather than a ramp, and all five ramp stops are written from it. The readout is
@@ -5019,6 +5027,12 @@ if (uiEl && PARAMS.get('ui') !== '1') {
   // re-runs and nothing is re-thrown, so they drag live at any population, and each prints
   // the value to paste into CONFIG once it is settled.
   const ROWS = [
+    // The one control the client asked for: the population. It is a REBUILD — the seats and
+    // the simulation's buffers are one texel per particle, so a change of count re-throws
+    // everything — and it fires on release for the same reason.
+    { key: 'particleCount', name: 'quantity', cst: 'CONFIG.particleCount',
+      min: 50000, max: 800000, step: 25000, value: CONFIG.particleCount,
+      rebuild: true, round: true, text: () => CONFIG.particleCount.toLocaleString('en-US') },
     { key: 'offsetX', name: 'offset x', cst: 'CONFIG.offsetX',
       min: -0.5, max: 1.0, step: 0.005, value: CONFIG.offsetX,
       place: true, text: () => CONFIG.offsetX.toFixed(3) },
@@ -5027,7 +5041,7 @@ if (uiEl && PARAMS.get('ui') !== '1') {
       place: true, text: () => CONFIG.offsetY.toFixed(3) },
   ];
 
-  uiEl.innerHTML = '<h2>offset</h2>' + ROWS.map((r, i) =>
+  uiEl.innerHTML = '<h2>quantity &amp; offset</h2>' + ROWS.map((r, i) =>
     '<div class="row"><div class="lbl">'
     + '<span class="name">' + r.name + '</span>'
     + '<span class="val" id="pv' + i + '">' + r.text() + '</span></div>'
