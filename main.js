@@ -540,9 +540,8 @@ const CONFIG = {
   // small numbers, so the buffer keeps its precision where it is needed — and on a device
   // that will only give us half floats, an absolute position's smallest representable step
   // is larger than one frame's movement and the cloud would simply never start.
-  simSpeed: 0.085,          // Slowed hard on the client's request: the churn inside the
-                            // mound should read as a slow breathing, not a simmer. The
-                            // field's own drift is the only thing moving grains at rest
+  simSpeed: 0.055,          // 1.5x slower again on the client's request — the churn now
+                            // breathes. At rest this field is the only thing moving grains
   // Also the leash. The seeds sit AT the corner, but a particle wanders further the longer
   // it lives, and it can only wander one way — inward, because the corner is a boundary and
   // there is nothing on the other side of it to wander into. So a long life does not just
@@ -565,8 +564,7 @@ const CONFIG = {
                             //   octave is the macro swirl and the x3.1 one below carries the
                             //   filament detail. From the reference:
                             //   its field decorrelates over 13-20% of the mass radius
-  simFieldSpeed: 0.42,      // Slowed with simSpeed so the wisps cross the mound lazily;
-                            // the two were raised together and come down together
+  simFieldSpeed: 0.28,      // slowed 1.5x with simSpeed, so the wisps cross the mound lazily
   simDivergence: 0.75,      // the spreading half of the field — see curlNoise. Held under 1
                             //   so the field turns more than it spreads: the first clip's
                             //   look is curling ink, not a burst opening out
@@ -619,10 +617,10 @@ const CONFIG = {
   // holds one size and one shape, and is gone the frame the pointer leaves. That is a torch
   // shone at a spot, and no amount of roughening its rim stops it being one. Only a force
   // leaves something behind for the flow to carry off and pull out of shape.
-  hoverFeel: 0.60,          // Half the hover is the old displacement, half the inertial
-                            // force with its trail: the pointer opens a hole immediately
-                            // AND leaves momentum behind for the field to carry off, which
-                            // is the original PTS feel.
+  hoverFeel: 1.0,           // ver30's hover exactly: the whole effect is the inertial
+                            // force laid along the pointer's trail, which leaves momentum
+                            // behind for the field to carry off. No displacement term.
+                            //   The displacement path survives below this dial only.
 
   // The far end of the dial, stated as the thing that can be judged by looking: how long a
   // shove the cursor gave keeps travelling. settle and drag are solved from it — see
@@ -735,12 +733,12 @@ const CONFIG = {
   // Stated as a speed, the same way the cursor's push is: a fraction of the mass radius per
   // second, with the force solved back out of it through the same gain, so the number means
   // one thing whatever the inertia is set to.
-  attractPull: 0.075,       // 0 turns it off. This is the migration engine now: the speed a
-                            // grain's journey settles at, so 0.075 crosses the whole menu in
-                            // six seconds or so — the client asked for a slow, readable roll
+  attractPull: 0.14,        // 0 turns it off. This is the migration engine now, and the
+                            // client asked for MORE attraction: grains cross the menu in
+                            // about three seconds and gather decisively on the tab
   attractRadius: 0.34,      // superseded: place() sizes the reach from the menu span, so
                             //   a grain at the far end still feels the new category
-  attractCore: 0.15,        // as a fraction of the reach. INSIDE this the pull eases off to
+  attractCore: 0.22,        // as a fraction of the reach. INSIDE this the pull eases off to
                             //   nothing, which is what makes it gather rather than collapse:
                             //   a force that keeps pulling all the way to the centre packs
                             //   every mote it catches into one point and the sign ends up
@@ -800,15 +798,10 @@ const CONFIG = {
   //
   // Radius and push are fractions of viewport HEIGHT, not world units, so the opening
   // holds its size on screen at any window. Don't put world units here.
-  mouseRadius: 0.085,       // Local disturbance, not a hole across the whole menu.
-                            //   top of the bar. Raised because the reach is
-                            //   now correctly divided by the group's scale — the old number
-                            //   was reaching 1.9x further than it said
-  mouseStrength: 0.055,     // Restore hover without moving the category's focus.
-                            //   ver7-ver10's 0.055: it had been cut to 0.022 when the note
-                            //   was that hover felt too FAST, and that turned out to be the
-                            //   growth rather than the push — so the push had been quietly
-                            //   carrying a fix for something else
+  mouseRadius: 0.350,       // ver30's reach: a wide tube through the cloud, divided by the
+                            // group's scale here so the number survives a resize
+  mouseStrength: 0.075,     // ver30's value. Only read when hoverFeel < 1 — the displacement
+                            // end of the dial, silent at the shipped setting
   falloffPower: 3.0,        // 1 = linear, 2 = soft outer edge with a firm core
   mouseSmoothing: 0.10,     // lag on the cursor the motes actually see, per frame. Low
                             //   values make the cloud trail the pointer.
@@ -1130,7 +1123,8 @@ const CONFIG = {
   // Halved from 0.667. The pairing with the box still holds — the box is a fraction of the
   // size the cloud reaches when open, and this is the trip back — but the fraction is now
   // 0.75 rather than 0.6, so the cloud grows half as far off its resting size.
-  expandAmount: 0.12,
+  expandAmount: 0.34,       // ver30's bloom: the cloud grows by a third when the pointer
+                            // comes near, which is half of what makes the hover read
   // How near the pointer must come, as fractions of viewport height measured from the
   // cloud's centre. FULL strength anywhere inside expandHoverInner, then fading to
   // nothing at expandHoverRadius.
@@ -1811,7 +1805,7 @@ void main(){
   // Spread the carried grains along the floor, lifting the centre into a soft mountain.
   // This remaps the persistent simulation; neither selection nor travel re-seeds particles.
   float across = simPos.x / uMound.z;
-  float flowTime = uTime * 0.38; // slowed: the surface drifts at roughly half its old pace
+  float flowTime = uTime * 0.25; // slowed 1.5x: the surface drifts at a lazy pace
   vec3 flowPoint = vec3(across * 3.2, aShape * 2.8, flowTime);
   float fold = snoise3dDeriv(flowPoint).w;
   float detail = snoise3dDeriv(flowPoint * 2.3 + vec3(7.0, 19.0, 3.0)).w;
@@ -4595,12 +4589,12 @@ function followCategory(dt) {
     Object.assign(m, { x: tx, y: ty, vx: 0, vy: 0, ready: true });
   } else {
     // Critically damped spring, integrated in small steps so stalls cannot destabilize it.
-    // Softer than it was: the peak travels over a leisurely second or so, and the grains
-    // make their own, longer journey behind it.
+    // A little more eager than before, matching the stronger pull: the peak answers the
+    // new tab promptly and the grains roll in behind it.
     for (let remaining = dt; remaining > 0;) {
       const h = Math.min(remaining, 1 / 120);
-      m.vx += ((tx - m.x) * 22 - m.vx * 9.4) * h;
-      m.vy += ((ty - m.y) * 22 - m.vy * 9.4) * h;
+      m.vx += ((tx - m.x) * 30 - m.vx * 11) * h;
+      m.vy += ((ty - m.y) * 30 - m.vy * 11) * h;
       m.x += m.vx * h;
       m.y += m.vy * h;
       remaining -= h;
