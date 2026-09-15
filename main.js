@@ -738,7 +738,9 @@ const CONFIG = {
                             // about three seconds and gather decisively on the tab
   attractRadius: 0.34,      // superseded: place() sizes the reach from the menu span, so
                             //   a grain at the far end still feels the new category
-  attractCore: 0.22,        // as a fraction of the reach. INSIDE this the pull eases off to
+  attractCore: 0.08,        // as a fraction of the reach — a NARROW core, so the gathered
+                            // plume stays about one tab wide and never drifts under the
+                            // neighbours. INSIDE it the pull eases off to
                             //   nothing, which is what makes it gather rather than collapse:
                             //   a force that keeps pulling all the way to the centre packs
                             //   every mote it catches into one point and the sign ends up
@@ -1810,24 +1812,27 @@ void main(){
   float fold = snoise3dDeriv(flowPoint).w;
   float detail = snoise3dDeriv(flowPoint * 2.3 + vec3(7.0, 19.0, 3.0)).w;
   // The peak is no longer welded to the emitter's origin: uPeakX carries the selected
-  // category, and it wanders gently about that target on the same noise the surface is
-  // made of, so the silhouette never reads as a fixed shape parked on the menu.
-  float peak = uPeakX + 0.04 * sin(flowTime * 0.50) + fold * 0.05;
-  // Each grain's own ridge width, phased off its seed — but TIGHT: the mound has to read
-  // as a distinct mountain over the chosen tab, not a broad swell.
+  // category, and it wanders only gently about that target, so the silhouette stays put
+  // over its own tab.
+  float peak = uPeakX + 0.03 * sin(flowTime * 0.50) + fold * 0.03;
+  // A TIGHT ridge: the tabs sit only about 0.12 apart in across units, so a broad mound
+  // reaches under the neighbours. This one spans about a quarter of a tab gap.
   float ridge = exp(-pow(across - peak, 2.0)
-                    * (7.0 + 2.5 * sin(flowTime * 0.30 + aShape * 6.2831)));
+                    * (14.0 + 4.0 * sin(flowTime * 0.30 + aShape * 6.2831)));
+  // The surface goes quiet where it rises: three quarters of the noise folds away at the
+  // peak, so the mass over the tab reads as one concentrated column instead of churn.
+  float calm = 1.0 - 0.75 * ridge;
   float height = pow(aShape, 1.35);
   // The layer lies LOW at the frame's borders and rises into the peak only about the
   // selected category, so the silhouette is: thin base, distinct mountain, thin edges.
   float edgeDrop = 1.0 - 0.85 * smoothstep(0.72, 1.12, abs(across));
-  pos.x = (across + fold * height * 0.12) * uMound.x;
+  pos.x = (across + fold * height * 0.12 * calm) * uMound.x;
   pos.y = height * uMound.y * (0.07 + 0.93 * ridge) * edgeDrop
-        * (1.0 + fold * 0.38 + detail * 0.14)
-        + simPos.y * 0.40 * edgeDrop;
+        * (1.0 + (fold * 0.38 + detail * 0.14) * calm)
+        + simPos.y * 0.40 * edgeDrop * (0.35 + 0.65 * calm);
   // A slow private bob on top, so a grain at rest is still travelling — the tallest
   // column moves most and the floor barely at all.
-  pos.y += uMound.y * (0.012 + 0.05 * ridge) * edgeDrop
+  pos.y += uMound.y * (0.012 + 0.05 * ridge) * edgeDrop * calm
          * sin(flowTime * (0.35 + aShape * 0.8) + aShape * 40.0);
 
   // ---- 1b. bloom out of the corner on hover ---------------------------------
@@ -4663,7 +4668,7 @@ function place() {
     sim.step.uniforms.uMigrateX.value = peakAcross * uniforms.uMound.value.z;
     sim.step.uniforms.uAttractPoint.value.set(0, 0, 0);
     uniforms.uSignPoint.value.set(0, 0, 0);
-    sim.step.uniforms.uAttractRadius.value = uniforms.uMound.value.z * 2.0;
+    sim.step.uniforms.uAttractRadius.value = uniforms.uMound.value.z * 1.2;
     simLeash = uniforms.uMound.value.z * 4.0;
   }
 
