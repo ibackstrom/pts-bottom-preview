@@ -1681,7 +1681,7 @@ void main(){
   // The field is damped in a zone about the migration target, so the gathered mass over
   // the tab sits still and centred instead of being pushed about — or pushed sideways by
   // the flow's own lean — by the churn. Outside the zone the field runs at full strength.
-  float nearCore = exp(-pow(length(offset.xy - vec2(uMigrateX, 0.0)) / (0.25 * uAttractRadius), 2.0));
+  float nearCore = exp(-pow(length(state.xy - vec2(uMigrateX, 0.0)) / (0.25 * uAttractRadius), 2.0));
   vec3 target = fieldVelocity(here) * (1.0 - 0.90 * nearCore)
               + birthImpulse(here, age) + vec3(0.0, -uGravity, 0.0);
   v += (target - v) * clamp(uSettle, 0.0, 1.0);
