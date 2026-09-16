@@ -18,7 +18,8 @@ Open http://127.0.0.1:8031/PTSBottomVer1/ (ES modules require HTTP, not a double
 - A broad particle layer rests along the whole bottom, with a soft mountain-like peak reaching the selected menu item.
 - The emitter is anchored across the bottom menu; the particles themselves migrate to the selected category through the simulation — each grain on its own clock, through the noise field, so switching reads as an organic roll rather than the shape being moved. Reversing direction mid-travel works the same way, with no particles recreated and no simulation reset.
 - The mound's silhouette is never static: coherent noise folds travel through it, each grain's ridge width and private bob are phased off its own seed, and the curl field churns the population underneath.
-- Hovering disturbs the cloud like the original PTS system: the pointer opens a ragged hole immediately and the inertial force plus its trail leave momentum behind for the field to carry off.
+- Hovering disturbs the cloud exactly as in the original PTSVer30 system: the pointer's trail is a force in the simulation, so the wake has momentum and swirl, keeps travelling after the pointer has gone, and settles back into the ambient flow.
+- The band sinks organically below the frame toward the sides (no hard vertical cut), measured from the peak so every category dissolves the same way; the CROP dial in the `?ui=1` panel sets how far that reaches. The mobile layout relaxes the crop automatically.
 - The red cloud and hard-coded menu in the PDF's background image have been removed; the bottom menu is live HTML. The remaining page is a visual background, not a working booking/navigation site.
 - Desktop preserves the sketch composition. Portrait uses a central crop with the complete headline and a viewport-width menu.
 - Reduced-motion preference disables the travelling transition.

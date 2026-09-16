@@ -473,6 +473,13 @@ const CONFIG = {
                             //   the mound breathe and ripple like a fluid. 0 is the clean,
                             //   still mound; an earlier per-grain wander (each grain on its
                             //   own random seed) read as fuzz, not fluid, and was removed.
+  crop: 0.45,               // the CROP dial: how far from the PEAK the band has fully sunk
+                            //   away, in across-space (1.0 = the page's own edge, so past
+                            //   ~1.05 there is no crop). Measured from the peak, so the
+                            //   band dissolves the same way whichever tab is selected: it
+                            //   eases DOWN into the bottom edge — height and alpha both —
+                            //   never a hard vertical cut. The mobile layout spans the
+                            //   full width, so there the dial is widened (see place()).
 
   // ------------------------------------------------------------ parallax
   // A slow sway of the whole volume. With a fixed camera this is the only thing that
@@ -1830,6 +1837,7 @@ uniform vec3  uSignPoint;        // the label's centre and box, for the text's o
 uniform vec2  uSignHalf;
 uniform vec3  uMound;           // local half-width, peak height, and simulation seed radius
 uniform float uPeakX;           // the selected category, in the mound's across-space
+uniform float uCrop;            // across-space limit where the band has fully sunk away
 ${MOUND_GLSL}                   // moundState() + moundWorld(), shared with the sim's force
 uniform float uSignInk;
 uniform float uCloudRadius;
@@ -1906,6 +1914,17 @@ void main(){
   pos.y += uMound.y * (0.012 + 0.05 * ridge) * edgeDrop * calm * uFlowNoise
          * sin(flowTime * (0.35 + aShape * 0.8) + aShape * 40.0);
 
+  // ---- the crop: the band sinks away toward the frame's sides -----------------
+  // No hard cut. The envelope is measured from the PEAK, not the page's centre, so the
+  // band dissolves the same way whichever category is selected and no tab is ever
+  // buried: approaching the crop limit the mound eases DOWN below the frame edge —
+  // the way it does in the client's crop reference — and the alpha thins with it.
+  // uCrop is that limit in across-space (1.0 is the page's own edge, past which there
+  // is nothing left to crop).
+  float cropD = abs(across - uPeakX);
+  pos.y -= uMound.y * smoothstep(uCrop * 0.45, uCrop, cropD);
+  float cropEnv = 1.0 - smoothstep(uCrop * 0.60, uCrop, cropD);
+
   // ---- 1b. bloom out of the corner on hover ---------------------------------
   // Applied to the resting seat, before curl and push, so the two cursor responses
   // compose: the cloud grows AND the pointer still opens a hole inside the grown cloud.
@@ -1920,7 +1939,9 @@ void main(){
   float expand = uExpand * uExpandAmount * (1.0 - inPatch);
   pos = uExpandOrigin + (pos - uExpandOrigin) * (1.0 + expand);
 
-  vFade = envelope * (1.0 - smoothstep(0.72, 1.0, aShape));
+  // the crop's alpha joins the envelope: past the sink the band is gone entirely, and
+  // between the sink line and the limit the grains thin out as they go down
+  vFade = envelope * (1.0 - smoothstep(0.72, 1.0, aShape)) * cropEnv;
 
   // ---- 2. cursor: distance to the pointer RAY -------------------------------
   // The hover reads the pointer's TRAIL here, in this vertex shader, rather than in the
@@ -4017,6 +4038,7 @@ const uniforms = {
   uViewportPx: { value: 1 },
   uMound: { value: new THREE.Vector3(1, 1, 1) },
   uPeakX: { value: 0 },
+  uCrop: { value: CONFIG.crop },
   uFlowNoise: { value: CONFIG.flowNoise },
   uMinPx: { value: CONFIG.minPx },
   uGrainAxis: { value: new THREE.Vector2(1, 0) },
@@ -4690,6 +4712,7 @@ let simLeash = 0;           // how far a grain may stray from its seat, in simul
 const OFFSET_NEUTRAL = { x: -0.100, y: 0.405 };
 const categoryMotion = { x: 0, y: 0, vx: 0, vy: 0, ready: false };
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
+const mobileLayout = matchMedia('(max-width: 600px) and (orientation: portrait)');
 
 function followCategory(dt) {
   const r = document.querySelector('#categories [aria-pressed="true"]').getBoundingClientRect();
@@ -4748,6 +4771,9 @@ function place() {
   // and the force that carries them there can never disagree.
   const peakAcross = ((x - 0.5) * vw / group.scale.x) / uniforms.uMound.value.x;
   uniforms.uPeakX.value = peakAcross;
+  // The crop. On the mobile layout the menu spans the whole width, so the dial is relaxed
+  // there: sinking the band at the sides would bury the outer categories.
+  uniforms.uCrop.value = mobileLayout.matches ? Math.max(CONFIG.crop, 1.05) : CONFIG.crop;
   // Holding the anchor still under a magnification of z is exactly dividing its world
   // position by z: the projection scales x and y by z at a fixed depth, so the two cancel and
   // the cloud keeps its place on screen while its contents still grow.
@@ -4964,6 +4990,9 @@ function resize() {
   place();
 }
 addEventListener('resize', resize);
+// An orientation change flips the layout between the mobile and desktop arrangements
+// without resizing the window in a way the resize event always catches; re-run place().
+mobileLayout.addEventListener('change', place);
 resize();
 
 // The buffers are particle-space, so this is built once and never touched by a resize.
@@ -5176,6 +5205,12 @@ if (uiEl && PARAMS.get('ui') !== '1') {
     { key: 'offsetY', name: 'offset y', cst: 'CONFIG.offsetY',
       min: -0.5, max: 1.0, step: 0.005, value: CONFIG.offsetY,
       place: true, text: () => CONFIG.offsetY.toFixed(3) },
+    // Where the band has fully sunk away at the frame's sides, in across-space. 1.0 is
+    // the page's own edge, so past ~1.05 there is no crop. place() re-reads it (the
+    // mobile layout relaxes the dial automatically).
+    { key: 'crop', name: 'crop', cst: 'CONFIG.crop',
+      min: 0.30, max: 1.20, step: 0.01, value: CONFIG.crop,
+      place: true, text: () => CONFIG.crop.toFixed(2) },
   ];
 
   uiEl.innerHTML = '<h2>particles</h2>' + ROWS.map((r, i) =>
