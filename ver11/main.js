@@ -159,11 +159,11 @@ const CONFIG = {
   // times denser, while shrinking the grain alone cuts each mote's coverage to a ninth. Doing
   // both at once cancels exactly, so the density that was tuned on the large version is the
   // density that arrives on the small one, with no change to the count.
-  cornerRadius: 0.19,       // AURORA ver11: 0.15 packed the bead too tight; 0.19 gives the
-                            //   gathered mass its volume back
+  cornerRadius: 0.23,       // AURORA ver11: spread dial — 0.19 still read tight; 0.23 gives
+                            //   the mass the wider, airier spread the customer asked for
                             //   size dial — it is measured against the FRAME, so it does
                             //   not have to be re-derived when anything else moves
-  cornerBias: 0.42,         // spread of the Gaussian, in units of cornerRadius. It is no
+  cornerBias: 0.50,         // spread of the Gaussian, in units of cornerRadius. It is no
                             //   longer a power on a bounded radius — that gave the cloud a
                             //   last radius, which is a circle
   cornerSpill: 0.55,        // radians of overspill past the visible quarter, so the two
@@ -499,6 +499,10 @@ const CONFIG = {
                             // AURORA ver11: was 0.20 — with the deeper box this is what
                             // reads as volume, ver30-style, rather than blur
   depthDarken: 0.30,        // brightness lost across the same span
+
+  bottomFade: 0.10,         // AURORA ver11: fraction of the viewport height, from the page's
+                            //   bottom edge up, over which motes fade to black. Keeps the
+                            //   footer's type and the page edge clean when the mass hangs low
 
   // ------------------------------------------------------------ drift
   floatingParticles: 0.07,  // AURORA ver11: was 0.22 in ver10 — at that share the risers
@@ -1841,6 +1845,8 @@ uniform vec3  uExpandOrigin;     // the screen corner, in this object's local sp
 uniform float uExpand;           // 0..1, eased hover state
 uniform float uExpandAmount;
 uniform float uExpandCurlBoost;
+uniform float uBottomFade;       // AURORA ver11: fraction of the viewport height over which
+                                 //   motes fade to black as they near the page's bottom edge
 
 varying vec2  vUv;
 varying float vBrightness;
@@ -2034,6 +2040,13 @@ void main(){
           + (q - uGrainAxis * alongQ) / max(0.2, uGrainStretch);
   mv.xy += qs * worldSize;
   gl_Position = projectionMatrix * mv;
+
+  // AURORA ver11: fade to black toward the page's bottom edge. Judged in SCREEN space so
+  // it holds whatever the cloud's own depth or the seat layout is doing: motes in the
+  // bottom band thin out to nothing, so the row of type along the footer keeps its black.
+  float ndcY = gl_Position.y / max(1e-4, gl_Position.w);
+  float fromBottom = clamp((ndcY + 1.0) * 0.5, 0.0, 1.0);   // 0 at the bottom edge
+  vAlphaScale *= smoothstep(0.0, uBottomFade, fromBottom);
 }
 `;
 
@@ -4022,6 +4035,7 @@ const uniforms = {
   uExpand: { value: 0 },
   uExpandAmount: { value: CONFIG.expandAmount },
   uExpandCurlBoost: { value: CONFIG.expandCurlBoost },
+  uBottomFade: { value: CONFIG.bottomFade },
 
   uProgress: { value: 0.5 },
   uScanSize: { value: CONFIG.scanSize },
