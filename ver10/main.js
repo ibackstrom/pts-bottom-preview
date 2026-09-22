@@ -785,12 +785,11 @@ const CONFIG = {
                             //   under the baseline rather than a strip level with the type.
                             //   The type is only about 16 px tall, so this stays proportionally
                             //   larger than signPad — a band, not a hairline
-  signLeash: 0.10,          // how far one may drift from its own seat, in mass radii. They
-                            //   stir; they do not leave. A dead one respawns on the label,
-                            //   because that is where its seat is
-  signShield: 0.0,          // how much of the cursor's push they feel. Zero: the hover does
+  signLeash: 0.0,           // disabled: this positional clamp fought the pull and could
+                            // recoil motes when the moving label box re-caught them
+    signShield: 0.0,          // how much of the cursor's push they feel. Zero: the hover does
                             //   not touch them, which is the point of the split
-  signInk: 0.30,            // extra alpha they carry. The cloud is faint by design at
+  signInk: 0.0,             // extra alpha they carry. The cloud is faint by design at
                             //   alphaGain 0.43 — right for a dusting over a wall — and white
                             //   type has to be read AGAINST its backing. ?ink=0 matches them
                             //   to the rest
@@ -1528,6 +1527,10 @@ uniform float uAttractPull;
 // the emitter sliding along X. The shift is added wherever the SEAT is used as a position,
 // so reborn motes appear on the new tab while the pull attracts the living ones there.
 uniform vec2  uSeatShift;
+uniform vec2  uSeatDelta;     // AURORA ver10: this frame's change in uSeatShift. The offsets
+                              // in the buffers are relative to the OLD shift, so both passes
+                              // subtract the delta before using them — the seats can glide
+                              // without rigidly carrying the living particles along
 varying vec2 vUv;
 
 vec3 fieldVelocity(vec3 p){
@@ -1652,7 +1655,7 @@ vec3 cursorForce(vec3 p, float shape){
 void main(){
   vec4 seed  = texture2D(tSeed, vUv);
   vec4 state = texture2D(tPos,  vUv);
-  vec3 offset = state.xyz;
+  vec3 offset = state.xyz - vec3(uSeatDelta, 0.0);
   float age = state.w + uDt;
 
   // read the field at the particle's real position, not at its seat, or every particle in
@@ -1701,7 +1704,7 @@ void main(){
   vec4 seed  = texture2D(tSeed, vUv);
   vec4 state = texture2D(tPos,  vUv);
   float age  = state.w + uDt;
-  vec3 here  = vec3(seed.xy + uSeatShift, seed.z) + state.xyz;
+  vec3 here  = vec3(seed.xy + uSeatShift, seed.z) + (state.xyz - vec3(uSeatDelta, 0.0));
   vec3 v     = texture2D(tVel, vUv).xyz;
 
   // Which group this mote is in, from its SEAT and the label's BOX. A box distance, not a
@@ -4118,6 +4121,7 @@ function makeSim() {
       uAttractPull: { value: 0 },
       // AURORA ver10: seats' texture-space relocation — see glideSeats
       uSeatShift: { value: new THREE.Vector2() },
+      uSeatDelta: { value: new THREE.Vector2() },
     },
   });
 
@@ -4664,7 +4668,7 @@ function updateAttract(vh, dt) {
 function glideSeats(dt) {
   const vhGlide = viewHeightAt(CONFIG.anchorZ);
   const elGlide = document.getElementById('booknow');
-  if (!elGlide) return;
+  if (!elGlide) { sim.step.uniforms.uSeatDelta.value.set(0, 0); return; }
   const rg = elGlide.getBoundingClientRect();
   const ppw = innerHeight / vhGlide;
   const targetWorldX = (rg.left + rg.width / 2 - innerWidth / 2) / ppw;
@@ -4679,8 +4683,14 @@ function glideSeats(dt) {
   const ms = Math.max(1e-6, CONFIG.massScale);
   const targetShiftX = csx * (targetOffsetX - CONFIG.offsetX) * vhGlide / ms;
   const k = 1 - Math.exp(-Math.min(Math.max(dt, 1e-3), 0.05) * 5.0);
-  seatShift.x += (targetShiftX - seatShift.x) * k;
+  // AURORA ver10: the sim's offsets are stored relative to the PREVIOUS shift, so every
+  // frame the passes must know how far the seats just moved (uSeatDelta) and subtract it —
+  // otherwise the glide itself translates the living particles, which they read as being
+  // thrown ahead of the pull and then dragged back (the backward-then-forward recoil).
+  const deltaX = (targetShiftX - seatShift.x) * k;
+  seatShift.x += deltaX;
   sim.step.uniforms.uSeatShift.value.copy(seatShift);
+  sim.step.uniforms.uSeatDelta.value.set(deltaX, 0);
   uniforms.uSeatShift.value.copy(seatShift);
 }
 

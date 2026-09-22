@@ -27,7 +27,8 @@
        CSS transition, and the engine reads its box every frame, so the existing population
        flows after it — no respawn, just the cloud travelling. */
     #booknow { position: absolute; z-index: 0; pointer-events: none;
-      transition: left 1.9s cubic-bezier(.45,.05,.25,1), top 1.9s cubic-bezier(.45,.05,.25,1); }
+      transition: left 1.9s cubic-bezier(.45,.05,.25,1), top 1.9s cubic-bezier(.45,.05,.25,1),
+        width 1.9s cubic-bezier(.45,.05,.25,1), height 1.9s cubic-bezier(.45,.05,.25,1); }
     #status { position: fixed; bottom: 8px; left: 12px; color: #aaa; font: 11px Arial; z-index: 3; }
     /* The tuning rail: hidden unless the page is opened with ?ui=1. */
     #pui {
