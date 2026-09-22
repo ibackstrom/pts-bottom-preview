@@ -1520,7 +1520,6 @@ uniform vec2  uSignHalf;         // the label's box, half-extents in this object
 uniform float uSignLeash;
 uniform float uSignShield;
 uniform vec3  uAttractPoint;     // the label's centre, in this object's space
-uniform vec3  uHoldPoint;        // AURORA ver10: where the pull was before the last switch
 uniform float uAttractRadius;
 uniform float uAttractCore;
 uniform float uAttractPull;
@@ -1529,9 +1528,6 @@ uniform float uAttractPull;
 // the emitter sliding along X. The shift is added wherever the SEAT is used as a position,
 // so reborn motes appear on the new tab while the pull attracts the living ones there.
 uniform vec2  uSeatShift;
-// Seconds since the pull's target started moving (saturates at rest). The per-particle
-// response to the pull is staggered against it — see the velocity pass.
-uniform float uTravelClock;
 varying vec2 vUv;
 
 vec3 fieldVelocity(vec3 p){
@@ -1717,18 +1713,10 @@ void main(){
   vec3 target = fieldVelocity(here) + birthImpulse(here, age) + vec3(0.0, -uGravity, 0.0);
   v += (target - v) * clamp(uSettle, 0.0, 1.0);
   v += cursorForce(here, fract(seed.w * 7.31)) * uDt * mix(1.0, uSignShield, mine);
-  // AURORA ver10: the pull is STAGGERED per mote while the target is in motion. Each mote
-  // gets its own delay from its seed, so a switch dissolves the cloud in a ragged wave
-  // instead of the whole population answering as one body — the difference between
-  // particles being ATTRACTED to the new tab and the emitter sliding across. The clock
-  // saturates past the largest delay, so at rest every mote is pulled as before.
-  float pd = fract(sin(dot(seed.xy, vec2(12.9898, 78.233))) * 43758.5453);
-  float resp = smoothstep(pd * 0.9, pd * 0.9 + 0.35, uTravelClock);
-  // AURORA ver10: the stagger CROSSFADES the pull between the old tab and the new one
-  // instead of switching it off. At the click the two points coincide, so the total force
-  // is continuous — no frame where the holding force vanishes, no jiggling.
-  v += (attractTo(here, uAttractPoint) * resp
-      + attractTo(here, uHoldPoint) * (1.0 - resp)) * uDt;
+  // AURORA ver10: the pull is ALWAYS on and always toward the sprung target — a magnet,
+  // not a switch. Per-particle organic paths come from the flow field the mote already
+  // rides; gating the pull per mote read as the cloud drifting back before it surged.
+  v += attractTo(here, uAttractPoint) * uDt;
   v *= uDrag;
 
   // a reborn particle starts still, or it would arrive at its seat carrying whatever it was
@@ -4125,14 +4113,11 @@ function makeSim() {
       uSignLeash: { value: CONFIG.signLeash * d.radius },
       uSignShield: { value: CONFIG.signShield },
       uAttractPoint: { value: new THREE.Vector3(0, 0, 0) },
-      uHoldPoint: { value: new THREE.Vector3(0, 0, 0) },
       uAttractRadius: { value: 1 },
       uAttractCore: { value: CONFIG.attractCore },
       uAttractPull: { value: 0 },
-      // AURORA ver10: seats' texture-space relocation, and the stagger clock for the
-      // per-mote pull response — see the velocity pass
+      // AURORA ver10: seats' texture-space relocation — see glideSeats
       uSeatShift: { value: new THREE.Vector2() },
-      uTravelClock: { value: 2 },
     },
   });
 
@@ -4614,13 +4599,9 @@ const attractWorld = new THREE.Vector3();
 const attractSprung = new THREE.Vector3();
 const attractFlow = new THREE.Vector3();
 const attractDelta = new THREE.Vector3();
-const attractPrev = new THREE.Vector3();
-const attractHold = new THREE.Vector3();    // the pull's position when a switch began
 let attractSprungInit = false;
 let attractArc = 0;
-let attractMoving = false;
 let travelBoost = 1;        // sim field speed multiplier while the pull is in motion
-let travelClock = 2.0;      // seconds since the target started moving; saturates at rest
 const seatShift = new THREE.Vector2();   // AURORA ver10: seats' texture-space relocation
 
 // AURORA: the pull's target element GLIDES between the category tabs on a CSS transition,
@@ -4636,24 +4617,6 @@ function updateAttract(vh, dt) {
                      (innerHeight / 2 - (r.top + r.height / 2)) / ppw,
                      CONFIG.anchorZ);
     group.worldToLocal(attractWorld);
-    // AURORA ver10: the travel clock — seconds since the pull's target last started moving.
-    // It resets when a switch begins and saturates at rest, so the per-mote stagger gates
-    // the pull only while a transition is young; see the velocity pass.
-    if (attractWorld.distanceToSquared(attractPrev) > 1e-8) {
-      if (!attractMoving) {
-        travelClock = 0;
-        // the hold point: where the pull was when the switch began. The stagger crossfades
-        // the pull from here to the new target, so the force never vanishes mid-switch.
-        attractHold.copy(attractFlow);
-      }
-      attractMoving = true;
-    } else {
-      attractMoving = false;
-    }
-    attractPrev.copy(attractWorld);
-    travelClock = Math.min(2.0, travelClock + Math.min(0.05, dt || 1 / 60));
-    sim.step.uniforms.uTravelClock.value = travelClock;
-    sim.step.uniforms.uHoldPoint.value.copy(attractHold);
     // AURORA ver10: spring the pull point after the raw box. The lag eases the chase —
     // the cloud starts moving as the box accelerates and settles as it decelerates,
     // rather than shadowing the box one-to-one.
