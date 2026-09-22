@@ -31,7 +31,8 @@ const CONFIG = {
   // read the shading and it becomes an object at a distance; at 4 px it is a dot and the
   // cloud flattens into a spray however deep the box is. This is the single biggest
   // lever on whether the thing looks volumetric.
-  particleCount: 160000,    // AURORA ver11: was 45000 in ver10. The customer read the sparse
+  particleCount: 45000,     // AURORA ver11: back to ver10's population — the customer asked
+                            //   for ver10's look again; ver11's 160k finer grains read thin
                             //   dust as flat — ver30's CTA cloud carried its volume from
                             //   density. ~3.5x the population, paired with the smaller
                             //   alphaGain below so the ink stays as faint per grain.
@@ -48,7 +49,8 @@ const CONFIG = {
   // down past about a pixel does not make finer grains, it makes invisible ones. At 0.62
   // with sizeMax 3.2 the whole population went sub-pixel and the drawn pixels fell a
   // hundredfold — the cloud read as a speck.
-  particleSize: 2.05,       // AURORA ver11: ver30's value — finer motes suit the denser mass
+  particleSize: 2.40,       // AURORA ver11: back to ver10's grain — the bigger motes carry
+                            //   the volume at 45k; ver30's 2.05 suited only the dense mass
 
   // Size comes from a HEAVY-TAILED draw rather than a +/- spread around the base:
   // mult = sizeMin + (sizeMax - sizeMin) * rand^sizeBias.
@@ -159,23 +161,21 @@ const CONFIG = {
   // times denser, while shrinking the grain alone cuts each mote's coverage to a ninth. Doing
   // both at once cancels exactly, so the density that was tuned on the large version is the
   // density that arrives on the small one, with no change to the count.
-  cornerRadius: 0.23,       // AURORA ver11: back to 0.23 — the wider, airier spread from the
-                            //   round the customer called almost optimal; the 0.20 trim
-                            //   took the volume back out
+  cornerRadius: 0.20,       // AURORA ver11: back to ver10's pair (with cornerBias below) —
+                            //   the customer asked for ver10's look
                             //   size dial — it is measured against the FRAME, so it does
                             //   not have to be re-derived when anything else moves
-  cornerBias: 0.50,         // AURORA ver11: back to 0.50 with the radius — the pair is one
-                            //   volume setting. It is no
+  cornerBias: 0.42,         // AURORA ver11: back to ver10's spread. It is no
                             //   longer a power on a bounded radius — that gave the cloud a
                             //   last radius, which is a circle
   cornerSpill: 0.55,        // radians of overspill past the visible quarter, so the two
                             //   straight edges do not read as a cut. Small: most of the
                             //   overspill goes up and right, which is off the screen, so it
                             //   is paid for out of the population without being seen
-  cornerDepth: 0.72,        // thickness front to back, as a fraction of the radius.
-                            // AURORA ver11: was 0.45 — deepened for the volumetric read
-                            //   ver30's cloud had; the aerial-perspective shading below
-                            //   is what turns the depth into volume, not just blur
+  cornerDepth: 0.45,        // thickness front to back, as a fraction of the radius.
+                            // AURORA ver11: back to ver10's shallower slab — the customer
+                            //   asked for ver10's look; the 0.72 depth belonged to the
+                            //   160k-grain build
 
   // ------------------------------------------------------------ the silhouette
   // The mass is one elongated STREAK, not a blob: roughly three to one, dense and wide at
@@ -188,11 +188,11 @@ const CONFIG = {
                             //   AURORA: 180 runs flat along the tab row — the CTA's 196
                             //   smeared the grains down-left, which read as the cloud
                             //   hanging off to one side of the menu
-  silhouette: 1.15,         // long-to-across ratio of the streak. 1 is a circle.
-                            // AURORA ver11: was 3.4 — the long tail read as a trail
-                            //   left behind on the tab row. A compact near-round mass
-                            //   carries the volume without the tail
-  streakTaper: 0.35,        // how fast the trailing end thins out, in plane widths. Small
+  silhouette: 3.4,          // long-to-across ratio of the streak. 1 is a circle.
+                            // AURORA ver11: back to ver10's values (with streakTaper
+                            //   below) — unused while cornerSeed throws the seats, kept
+                            //   in step so the two builds stay comparable
+  streakTaper: 0.95,        // how fast the trailing end thins out, in plane widths. Small
                             //   is an abrupt stub, large is a long dissolving tail
   streakHead: 0.10,         // how far the dense end reaches PAST the focus toward the
                             //   corner, so the mass stays anchored there rather than
@@ -457,10 +457,11 @@ const CONFIG = {
   // visible mass inward off it. Nudging the group back out is the honest correction for
   // that, and it is easier to set by eye than to derive.
   offsetX: 0.0,             // AURORA: the cloud lives at the bottom-centre, on the category
-  offsetY: -0.11,           //   menu, not in the top-right corner. corner 'br' + anchorY 1
+  offsetY: -0.14,           //   menu, not in the top-right corner. corner 'br' + anchorY 1
                             //   parks the group on the bottom edge; offsetX 0 centres it,
                             //   offsetY lifts the anchor to the tab row (88.95% of the
-                            //   frame ≈ 0.11 viewport heights up)
+                            //   frame ≈ 0.11 viewport heights up). AURORA ver11: -0.14 —
+                            //   lifted a little further, as asked
   massScale: 1.20,          // on-screen size of the whole thing, motion included
 
   anchorX: 0.00,
@@ -497,20 +498,22 @@ const CONFIG = {
   // Aerial perspective: motes at the back of the volume are dimmed and thinned. Without
   // it every mote is equally present and the volume collapses back into a decal however
   // correct the geometry is.
-  depthFade: 0.28,          // alpha lost across the full depth of the box, 0 = flat.
-                            // AURORA ver11: was 0.20 — with the deeper box this is what
-                            // reads as volume, ver30-style, rather than blur
-  depthDarken: 0.30,        // brightness lost across the same span
+  depthFade: 0.20,          // alpha lost across the full depth of the box, 0 = flat.
+                            // AURORA ver11: back to ver10's pair with depthDarken below —
+                            //   the customer asked for ver10's look
+  depthDarken: 0.22,        // brightness lost across the same span
 
   bottomFade: 0.10,         // AURORA ver11: fraction of the viewport height, from the page's
-                            //   bottom edge up, over which motes fade to black. Keeps the
-                            //   footer's type and the page edge clean when the mass hangs low
+                            //   bottom edge up, over which motes fade to black. This is the
+                            //   fade ON THE TRAIL: the risers below (ver10's 0.22 share is
+                            //   restored) leave a wake, and this sinks it into black at
+                            //   the page edge instead of letting it pile up
 
   // ------------------------------------------------------------ drift
-  floatingParticles: 0.07,  // AURORA ver11: was 0.22 in ver10 — at that share the risers
-                            //   never answered the pull and stayed behind as a trail along
-                            //   the path after a tab switch. A few keep the air alive
-  floatingSpeed: 0.12,      // clock rate for the 5-second travel-and-recycle cycle
+  floatingParticles: 0.22,  // AURORA ver11: back to ver10's share — the risers are part of
+                            //   the look the customer asked for. Their wake is handled by
+                            //   the bottomFade above and the field-bias fix in the sim
+  floatingSpeed: 0.17,      // clock rate for the 5-second travel-and-recycle cycle
   floatingDirectionX: 0.10, // the travel direction, normalised
   floatingDirectionY: 1.0,
   floatingDirectionZ: 0.0,
@@ -525,12 +528,11 @@ const CONFIG = {
                             //   over 13-20% of the mass radius, where this cloud's ran to
                             //   45% — eddies larger than the cloud they were supposed to
                             //   be curling, which is why nothing in it ever folded
-  curlAmplitude: 0.15,      // how far a mote is carried off its seat. This is the main
-                            //   "how alive is it" dial. AURORA ver11: was 0.20 — with the
-                            //   sim's field softened below, the per-mote wander reads calmer
-  curlSpeed: 12.0,          // how fast the field itself evolves. The field translates in
+  curlAmplitude: 0.20,      // how far a mote is carried off its seat. This is the main
+                            //   "how alive is it" dial. AURORA ver11: back to ver10's value
+  curlSpeed: 18.0,          // how fast the field itself evolves. The field translates in
                             //   its own z with time, so motes do not retrace a path.
-                            //   AURORA ver11: was 18 — slowed with the sim for smoothness
+                            //   AURORA ver11: back to ver10's rate
   curlDivergence: 1.00,     // how much of a purely SPREADING field is mixed into the swirl,
                             //   0 = curl only. 1 puts divergence and vorticity at the same
                             //   rms, which is what the reference measures right through its
@@ -562,10 +564,9 @@ const CONFIG = {
   // small numbers, so the buffer keeps its precision where it is needed — and on a device
   // that will only give us half floats, an absolute position's smallest representable step
   // is larger than one frame's movement and the cloud would simply never start.
-  simSpeed: 0.075,          // AURORA ver11: was 0.118 — the mass visibly jerked up/down/left/
-                            //   right. Slower field, same shapes: the drift is gentler, the
-                            //   churn reads smooth.
-                            //   the field's strength, as a fraction of the mass radius per
+  simSpeed: 0.118,          // AURORA ver11: back to ver10's pace — the customer asked for
+                            //   ver10's motion. the field's strength, as a fraction of the
+                            //   mass radius per
                             //   second, so a resize does not change the pace. The reference
                             //   carries its motes at 3.0-3.5% of the mass radius per second;
                             //   this sits above that because the curl's own magnitude is
@@ -589,22 +590,21 @@ const CONFIG = {
                             //   thins once, seven seconds after load — radius 42 to 36 and
                             //   a quarter of the drawn pixels gone. At 0.85 the same deaths
                             //   are smeared over twelve seconds and there is nothing to see
-  simFrequency: 0.90,       // eddy size, as 1/frequency in world units. LOW on purpose: this
+  simFrequency: 1.2,        // eddy size, as 1/frequency in world units. LOW on purpose: this
                             //   octave is the macro swirl and the x3.1 one below carries the
                             //   filament detail. From the reference:
                             //   its field decorrelates over 13-20% of the mass radius.
-                            //   AURORA ver11: back to 0.90 — the lower-frequency try was
-                            //   reverted; only the faster tab travel was kept
-  simFieldSpeed: 0.40,      // how fast the field itself changes, from the reference's
+                            //   AURORA ver11: back to ver10's 1.2 with the rest of the field
+  simFieldSpeed: 0.53,      // how fast the field itself changes, from the reference's
                             //   1.5-second coherence. Too high and the filaments never get
                             //   long enough to fold before the field that drew them is gone.
-                            //   AURORA ver11: was 0.53 — calmer
+                            //   AURORA ver11: back to ver10's rate
   simDivergence: 0.75,      // the spreading half of the field — see curlNoise. Held under 1
                             //   so the field turns more than it spreads: the first clip's
                             //   look is curling ink, not a burst opening out
-  simFine: 0.55,            // weight of a second octave at 3.1x the frequency. The large
+  simFine: 0.70,            // weight of a second octave at 3.1x the frequency. The large
                             //   octave makes the lobes, this one the hairs inside them.
-                            //   AURORA ver11: was 0.70 — less fine chatter
+                            //   AURORA ver11: back to ver10's weight
   simGravity: 0.0,          // world units per second, straight down, always. Off here: a
                             //   flow field has no down, and the drift it added only pulled
                             //   the mass off the corner
@@ -1036,13 +1036,9 @@ const CONFIG = {
   ],
   rampFringe: 0.16,         // density below which alpha ramps to zero. This is the dial for
                             //   how far the scattered specks reach before they vanish
-  alphaGain: 0.30,          // AURORA ver11: was 0.50 at 45k grains. 3.5x the population
-                            //   would otherwise stack 3.5x the ink; taken down by the
-                            //   density ratio so the cloud keeps ver10's faintness while
-                            //   gaining its smoothness
-                            //   nine times, so the mass lands near where it was but is made
-                            //   of far more, far fainter grains.
-                            // overall presence against the page, applied last. The bloom used
+  alphaGain: 0.50,          // AURORA ver11: back to ver10's ink level, paired with ver10's
+                            //   45k count and 2.40 grain above
+                            //   overall presence against the page, applied last. The bloom used
                             //   to provide this as a side effect of lifting the canvas alpha
 
   saturation: 1.35,
