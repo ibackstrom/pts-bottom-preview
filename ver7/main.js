@@ -657,7 +657,7 @@ const CONFIG = {
   //
   // Solving for the force instead, F = speed / (dt * gain), makes the number mean one thing
   // at every setting of the dial.
-  hoverPush: 1.20,          // of the mass radius per second. The client's setting, and it
+  hoverPush: 3.00,          // of the mass radius per second. The client's setting, and it
                             //   is the top of the bar's range — see the note there
 
   // ---- the trail ------------------------------------------------------------------
@@ -812,7 +812,7 @@ const CONFIG = {
   //
   // Radius and push are fractions of viewport HEIGHT, not world units, so the opening
   // holds its size on screen at any window. Don't put world units here.
-  mouseRadius: 0.350,       // radius of the tube that opens. The client's setting, and the
+  mouseRadius: 0.080,       // radius of the tube that opens. The client's setting, and the
                             //   top of the bar. Raised because the reach is
                             //   now correctly divided by the group's scale — the old number
                             //   was reaching 1.9x further than it said
@@ -1143,7 +1143,7 @@ const CONFIG = {
   // Halved from 0.667. The pairing with the box still holds — the box is a fraction of the
   // size the cloud reaches when open, and this is the trip back — but the fraction is now
   // 0.75 rather than 0.6, so the cloud grows half as far off its resting size.
-  expandAmount: 0.34,
+  expandAmount: 0.00,
   // How near the pointer must come, as fractions of viewport height measured from the
   // cloud's centre. FULL strength anywhere inside expandHoverInner, then fading to
   // nothing at expandHoverRadius.
