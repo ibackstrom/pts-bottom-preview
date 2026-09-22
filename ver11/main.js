@@ -587,12 +587,12 @@ const CONFIG = {
                             //   thins once, seven seconds after load — radius 42 to 36 and
                             //   a quarter of the drawn pixels gone. At 0.85 the same deaths
                             //   are smeared over twelve seconds and there is nothing to see
-  simFrequency: 0.65,       // eddy size, as 1/frequency in world units. LOW on purpose: this
+  simFrequency: 0.90,       // eddy size, as 1/frequency in world units. LOW on purpose: this
                             //   octave is the macro swirl and the x3.1 one below carries the
                             //   filament detail. From the reference:
                             //   its field decorrelates over 13-20% of the mass radius.
-                            //   AURORA ver11: was 0.90 — the customer asked for a still
-                            //   lower frequency on the big octave: broad, slow swells
+                            //   AURORA ver11: back to 0.90 — the lower-frequency try was
+                            //   reverted; only the faster tab travel was kept
   simFieldSpeed: 0.40,      // how fast the field itself changes, from the reference's
                             //   1.5-second coherence. Too high and the filaments never get
                             //   long enough to fold before the field that drew them is gone.
