@@ -159,11 +159,13 @@ const CONFIG = {
   // times denser, while shrinking the grain alone cuts each mote's coverage to a ninth. Doing
   // both at once cancels exactly, so the density that was tuned on the large version is the
   // density that arrives on the small one, with no change to the count.
-  cornerRadius: 0.20,       // AURORA ver11: spread dial — 0.23 was too much volume, this is
-                            //   between the tight 0.15 bead and the wide 0.23
+  cornerRadius: 0.23,       // AURORA ver11: back to 0.23 — the wider, airier spread from the
+                            //   round the customer called almost optimal; the 0.20 trim
+                            //   took the volume back out
                             //   size dial — it is measured against the FRAME, so it does
                             //   not have to be re-derived when anything else moves
-  cornerBias: 0.46,         // spread of the Gaussian, in units of cornerRadius. It is no
+  cornerBias: 0.50,         // AURORA ver11: back to 0.50 with the radius — the pair is one
+                            //   volume setting. It is no
                             //   longer a power on a bounded radius — that gave the cloud a
                             //   last radius, which is a circle
   cornerSpill: 0.55,        // radians of overspill past the visible quarter, so the two
