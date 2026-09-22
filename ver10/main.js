@@ -1520,6 +1520,7 @@ uniform vec2  uSignHalf;         // the label's box, half-extents in this object
 uniform float uSignLeash;
 uniform float uSignShield;
 uniform vec3  uAttractPoint;     // the label's centre, in this object's space
+uniform vec3  uHoldPoint;        // AURORA ver10: where the pull was before the last switch
 uniform float uAttractRadius;
 uniform float uAttractCore;
 uniform float uAttractPull;
@@ -1576,9 +1577,9 @@ vec3 birthImpulse(vec3 p, float age){
 // It is deliberately not a displacement toward the sign. The motes have to keep flowing on
 // the field while they are held — what makes it read as a cloud gathering somewhere is that
 // the drift is biased, not that the movement stops.
-vec3 attractForce(vec3 p){
+vec3 attractTo(vec3 p, vec3 target){
   if (uAttractPull < 1e-6) return vec3(0.0);
-  vec3 to = uAttractPoint - p;
+  vec3 to = target - p;
   float d = length(to);
   if (d < 1e-6) return vec3(0.0);
   float grip = smoothstep(0.0, max(1e-5, uAttractCore * uAttractRadius), d)
@@ -1723,7 +1724,11 @@ void main(){
   // saturates past the largest delay, so at rest every mote is pulled as before.
   float pd = fract(sin(dot(seed.xy, vec2(12.9898, 78.233))) * 43758.5453);
   float resp = smoothstep(pd * 0.9, pd * 0.9 + 0.35, uTravelClock);
-  v += attractForce(here) * uDt * resp;
+  // AURORA ver10: the stagger CROSSFADES the pull between the old tab and the new one
+  // instead of switching it off. At the click the two points coincide, so the total force
+  // is continuous — no frame where the holding force vanishes, no jiggling.
+  v += (attractTo(here, uAttractPoint) * resp
+      + attractTo(here, uHoldPoint) * (1.0 - resp)) * uDt;
   v *= uDrag;
 
   // a reborn particle starts still, or it would arrive at its seat carrying whatever it was
@@ -4120,6 +4125,7 @@ function makeSim() {
       uSignLeash: { value: CONFIG.signLeash * d.radius },
       uSignShield: { value: CONFIG.signShield },
       uAttractPoint: { value: new THREE.Vector3(0, 0, 0) },
+      uHoldPoint: { value: new THREE.Vector3(0, 0, 0) },
       uAttractRadius: { value: 1 },
       uAttractCore: { value: CONFIG.attractCore },
       uAttractPull: { value: 0 },
@@ -4609,6 +4615,7 @@ const attractSprung = new THREE.Vector3();
 const attractFlow = new THREE.Vector3();
 const attractDelta = new THREE.Vector3();
 const attractPrev = new THREE.Vector3();
+const attractHold = new THREE.Vector3();    // the pull's position when a switch began
 let attractSprungInit = false;
 let attractArc = 0;
 let attractMoving = false;
@@ -4633,7 +4640,12 @@ function updateAttract(vh, dt) {
     // It resets when a switch begins and saturates at rest, so the per-mote stagger gates
     // the pull only while a transition is young; see the velocity pass.
     if (attractWorld.distanceToSquared(attractPrev) > 1e-8) {
-      if (!attractMoving) travelClock = 0;
+      if (!attractMoving) {
+        travelClock = 0;
+        // the hold point: where the pull was when the switch began. The stagger crossfades
+        // the pull from here to the new target, so the force never vanishes mid-switch.
+        attractHold.copy(attractFlow);
+      }
       attractMoving = true;
     } else {
       attractMoving = false;
@@ -4641,6 +4653,7 @@ function updateAttract(vh, dt) {
     attractPrev.copy(attractWorld);
     travelClock = Math.min(2.0, travelClock + Math.min(0.05, dt || 1 / 60));
     sim.step.uniforms.uTravelClock.value = travelClock;
+    sim.step.uniforms.uHoldPoint.value.copy(attractHold);
     // AURORA ver10: spring the pull point after the raw box. The lag eases the chase —
     // the cloud starts moving as the box accelerates and settles as it decelerates,
     // rather than shadowing the box one-to-one.
@@ -4657,7 +4670,10 @@ function updateAttract(vh, dt) {
     attractArc += (arcTarget - attractArc) * (1 - Math.exp(-dtA * 3.0));
     attractFlow.copy(attractSprung);
     attractFlow.y += attractArc;
-    attractFlow.x += Math.sin(uniforms.uTime.value * 1.6) * 0.028 * travel;
+    // the sway eases in with the arc's own envelope, not with the raw travel flag —
+    // a flag appearing at full size in one frame is itself a jiggle
+    attractFlow.x += Math.sin(uniforms.uTime.value * 1.6) * 0.022
+                   * Math.min(1.0, attractArc / 0.05);
     sim.step.uniforms.uAttractPoint.value.copy(attractFlow);
     // the swirl deepens while travelling and hands back to the calm field on arrival —
     // the draw-side curl for the visible stir, and the sim's own field speed for the
