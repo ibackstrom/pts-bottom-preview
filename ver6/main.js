@@ -148,13 +148,18 @@ const CONFIG = {
   // points spilling out of the screen corner, dense at the corner and thinning outward.
   // Everything that gives the cloud its look happens downstream of this, in the flow.
   cornerSeed: true,         // false falls back to the model-and-mask seeding below
+  cornerFull: true,         // AURORA: throw the seeds the whole way round instead of a
+                            //   quarter-disc. The cloud is parked mid-edge, not in a
+                            //   corner, so a quarter spill would hang it lopsidedly to
+                            //   one side of the menu
   // A third of what it was. Note that particleSize came down by the same third rather than
   // staying put, and that pairing is what keeps the look identical instead of merely smaller:
   // shrinking the mass alone cuts its area to a ninth and makes the same population nine
   // times denser, while shrinking the grain alone cuts each mote's coverage to a ninth. Doing
   // both at once cancels exactly, so the density that was tuned on the large version is the
   // density that arrives on the small one, with no change to the count.
-  cornerRadius: 0.14,       // how far the cloud reaches, in viewport heights. This is the
+  cornerRadius: 0.17,       // AURORA ver6: bigger than the CTA's 0.14 — the cloud has to
+                            //   WRAP the pressed tab, not huddle under it
                             //   size dial — it is measured against the FRAME, so it does
                             //   not have to be re-derived when anything else moves
   cornerBias: 0.42,         // spread of the Gaussian, in units of cornerRadius. It is no
@@ -414,7 +419,7 @@ const CONFIG = {
   // Far enough in that the plane is mostly ON screen. The plane is centred on the group
   // origin and the origin is the screen corner, so at 0.15 roughly three quarters of it sat
   // outside the frame and every grain the field carried outward was carried out of sight.
-  position: 0.0,
+  position: 0.300,
 
   // ------------------------------------------------------------ the box the model fits
   // The rasterised plane is scaled to fit inside this box, keeping the model's
@@ -430,7 +435,7 @@ const CONFIG = {
   // Which corner the cloud grows out of: 'tr', 'tl', 'br', 'bl'. Everything that has to
   // agree with it — the anchor, the seed's quadrant and the origin the hover blooms about —
   // is derived from this one string rather than set three times.
-  corner: 'tr',
+  corner: 'br',
 
   // Where the mass actually sits, and how big it is on screen. All three are applied to the
   // GROUP, so they are instant — no seats are re-thrown — and they scale the motion with the
@@ -440,19 +445,15 @@ const CONFIG = {
   // was wrong: the seeds sit exactly on the corner and it is DIFFUSION that carries the
   // visible mass inward off it. Nudging the group back out is the honest correction for
   // that, and it is easier to set by eye than to derive.
-  offsetX: -0.100,          // the client's panel values, shipped as defaults. They are
-  offsetY: 0.405,           //   deltas from the anchored composition: OFFSET_NEUTRAL below
-                            //   carries these numbers, so the panel's home IS the deployed
-                            //   look and dragging a bar moves the cloud from it
-                            //   FRACTIONS of the viewport, not pixels, so the placement holds
-                            //   its proportion as the window changes rather than sitting at a
-                            //   fixed pixel offset that drifts across screen sizes.
-                            //   ?x= and ?y= still take them, which is how to try another
-                            //   placement without a build
+  offsetX: 0.0,             // AURORA: the cloud lives at the bottom-centre, on the category
+  offsetY: -0.11,           //   menu, not in the top-right corner. corner 'br' + anchorY 1
+                            //   parks the group on the bottom edge; offsetX 0 centres it,
+                            //   offsetY lifts the anchor to the tab row (88.95% of the
+                            //   frame ≈ 0.11 viewport heights up)
   massScale: 1.20,          // on-screen size of the whole thing, motion included
 
-  anchorX: 1.00,
-  anchorY: 0.97,
+  anchorX: 0.00,
+  anchorY: 1.00,
   anchorZ: 0.0,
 
   // How fast the motes do everything they do on their own — the swirl, the travel along
@@ -460,28 +461,12 @@ const CONFIG = {
   // CLOCK the motes are read from rather than any one of their speeds, so their motion stays
   // in proportion however fast it runs. The cloud's own sway is deliberately not included:
   // that is the camera's relationship to the volume, not the particles' own life.
-  speed: 0.20,              // the client's panel value: the whole particle clock, sim and
-                            //   surface alike, runs at this fraction of real seconds
+  speed: 0.55,              // The pace lives in simSpeed now — this scales the clock the
                             //   simulation is stepped with, and 1 means one second of the
                             //   cloud's life per second of the page's. Under 1 here because
                             //   the motion was asked for slower: it scales the whole clock,
                             //   so the drift, the bloom and the birth-to-death all slow
                             //   together and the character of the motion survives it.
-  flowNoise: 1.5,           // the NOISE dial: the organic surface noise, the same
-                            //   curl-and-gradient field family the simulation's velocity
-                            //   carries — coherent across space, drifting in time. It makes
-                            //   the mound breathe and ripple like a fluid. 0 is the clean,
-                            //   still mound; an earlier per-grain wander (each grain on its
-                            //   own random seed) read as fuzz, not fluid, and was removed.
-  crop: 1.20,               // VER6: the crop is a floor-band device and this variant has no
-                            //   floor band — relaxed past the page edge so nothing about the
-                            //   floating cloud is ever sunk or thinned by the crop envelope.
-                            //   away, in across-space (1.0 = the page's own edge, so past
-                            //   ~1.05 there is no crop). Measured from the peak, so the
-                            //   band dissolves the same way whichever tab is selected: it
-                            //   eases DOWN into the bottom edge — height and alpha both —
-                            //   never a hard vertical cut. The mobile layout spans the
-                            //   full width, so there the dial is widened (see place()).
 
   // ------------------------------------------------------------ parallax
   // A slow sway of the whole volume. With a fixed camera this is the only thing that
@@ -558,8 +543,13 @@ const CONFIG = {
   // small numbers, so the buffer keeps its precision where it is needed — and on a device
   // that will only give us half floats, an absolute position's smallest representable step
   // is larger than one frame's movement and the cloud would simply never start.
-  simSpeed: 0.055,          // 1.5x slower again on the client's request — the churn now
-                            // breathes. At rest this field is the only thing moving grains
+  simSpeed: 0.118,          // the client's setting, near twice what this was tuned at.
+                            //   the field's strength, as a fraction of the mass radius per
+                            //   second, so a resize does not change the pace. The reference
+                            //   carries its motes at 3.0-3.5% of the mass radius per second;
+                            //   this sits above that because the curl's own magnitude is
+                            //   folded in on top, and because at a third of the reference's
+                            //   size its exact rate reads as a still picture
   // Also the leash. The seeds sit AT the corner, but a particle wanders further the longer
   // it lives, and it can only wander one way — inward, because the corner is a boundary and
   // there is nothing on the other side of it to wander into. So a long life does not just
@@ -582,7 +572,9 @@ const CONFIG = {
                             //   octave is the macro swirl and the x3.1 one below carries the
                             //   filament detail. From the reference:
                             //   its field decorrelates over 13-20% of the mass radius
-  simFieldSpeed: 0.28,      // slowed 1.5x with simSpeed, so the wisps cross the mound lazily
+  simFieldSpeed: 0.53,      // how fast the field itself changes, from the reference's
+                            //   1.5-second coherence. Too high and the filaments never get
+                            //   long enough to fold before the field that drew them is gone
   simDivergence: 0.75,      // the spreading half of the field — see curlNoise. Held under 1
                             //   so the field turns more than it spreads: the first clip's
                             //   look is curling ink, not a burst opening out
@@ -635,14 +627,7 @@ const CONFIG = {
   // holds one size and one shape, and is gone the frame the pointer leaves. That is a torch
   // shone at a spot, and no amount of roughening its rim stops it being one. Only a force
   // leaves something behind for the flow to carry off and pull out of shape.
-  hoverFeel: 1.0,           // ver30's shipped value: the WHOLE hover is the simulation's
-                            // force, which integrates — a shove leaves momentum behind and
-                            // the trail's wake keeps travelling after the pointer leaves.
-                            // The cursorForce below now measures the pointer in WORLD units
-                            // (through moundWorld), which is the fix that makes this dial
-                            // usable here: the sim's seed units and the ray's space agreed
-                            // in ver30 and disagree after the mound's remap.
-  hoverPush: 3.00,          // the client's panel value: a hard, immediate shove
+  hoverFeel: 1.0,
 
   // The far end of the dial, stated as the thing that can be judged by looking: how long a
   // shove the cursor gave keeps travelling. settle and drag are solved from it — see
@@ -669,7 +654,9 @@ const CONFIG = {
   // it removed as well, leaving the push six times weaker than the ambient flow and invisible.
   //
   // Solving for the force instead, F = speed / (dt * gain), makes the number mean one thing
-  // at every setting of the dial. The value itself lives with hoverFeel above.
+  // at every setting of the dial.
+  hoverPush: 1.20,          // of the mass radius per second. The client's setting, and it
+                            //   is the top of the bar's range — see the note there
 
   // ---- the trail ------------------------------------------------------------------
   // The force is laid along the path the pointer took, not gathered at the single point it
@@ -709,7 +696,7 @@ const CONFIG = {
   // the falloff does, and they heap up into a bright ring that stands there for as long as
   // the pointer does. A rotation has no divergence - it stirs the ink rather than sweeping
   // it into a pile, so there is nothing for a ring to be made of.
-  hoverSwirl: 0.70,         // 0 = all outward, which is ver13; 1 = all swirl. ver30's value
+  hoverSwirl: 0.70,         // 0 = all outward, which is ver13; 1 = all swirl
 
   // The bloom, all three numbers read off the reference and all given per unit of the mass
   // radius so a resize does not have to re-derive them.
@@ -753,17 +740,17 @@ const CONFIG = {
   // Stated as a speed, the same way the cursor's push is: a fraction of the mass radius per
   // second, with the force solved back out of it through the same gain, so the number means
   // one thing whatever the inertia is set to.
-  attractPull: 9.0,         // VER6: the float's lift is ~24 sim units of climb, and the pull
-                            //   is a fraction of the sim radius per second — this size
-                            //   crosses it in a few seconds. (The CTA gather only ever
-                            //   crossed ~0.2 sim of floor, which is why its 0.50 worked.)
-                            // cloud at the tab — this variant's form is the gathered cloud,
-                            // not the mound
-  attractRadius: 0.34,      // superseded: place() sizes the reach from the menu span, so
-                            //   a grain at the far end still feels the new category
-  attractCore: 0.42,        // VER6: a wide, soft core — the float is a breathing cloud, not
-                            // about the tab — the CTA's cloud — and not a packed bead.
-                            // INSIDE it the pull eases off to
+  attractPull: 1.20,        // AURORA: the pull target MOVES between five tabs spread across
+                            //   most of the frame — up to six mass radii of travel. The old
+                            //   0.10 was a standing bias for a label that never moved; this
+                            //   has to actually carry the mass over in a few seconds
+  attractRadius: 0.85,      // reach, in viewport heights. Raised with the pull: the whole
+                            //   tab row has to be inside the grip, or a cloud parked on
+                            //   one tab feels nothing from a selection two tabs away
+                            //   (the Gaussian tail is what carries the far reach)
+  attractCore: 0.50,        // AURORA ver6: a wide core — the pull eases off well before the
+                            //   centre, so the gathered cloud stays HOLLOW and the tab
+                            //   text sits inside it readable instead of buried
                             //   nothing, which is what makes it gather rather than collapse:
                             //   a force that keeps pulling all the way to the centre packs
                             //   every mote it catches into one point and the sign ends up
@@ -781,7 +768,9 @@ const CONFIG = {
   //
   // What it does cost is LOOK: every mote given to the text is one the free cloud no longer
   // has. At half and half the drifting part is half as dense as the build it came from.
-  signSeats: 0.0,           // One persistent cloud; no separately seeded text population.
+  signSeats: 0.0,           // AURORA: no text-backed group. The menu is real DOM and moves
+                            //   between tabs — a sign group is born on one box and leashed
+                            //   to it forever, which is wrong when the pull target travels
                             //   Down from 0.50 with the tighter box below: the box lost about
                             //   two thirds of its area, so a fifth of the motes now sit in it
                             //   MORE densely than half of them did in the loose one — and the
@@ -797,7 +786,7 @@ const CONFIG = {
                             //   under the baseline rather than a strip level with the type.
                             //   The type is only about 16 px tall, so this stays proportionally
                             //   larger than signPad — a band, not a hairline
-  signLeash: 0.35,          // More room for the persistent flow to fold and churn.
+  signLeash: 0.10,          // how far one may drift from its own seat, in mass radii. They
                             //   stir; they do not leave. A dead one respawns on the label,
                             //   because that is where its seat is
   signShield: 0.0,          // how much of the cursor's push they feel. Zero: the hover does
@@ -823,16 +812,20 @@ const CONFIG = {
   //
   // Radius and push are fractions of viewport HEIGHT, not world units, so the opening
   // holds its size on screen at any window. Don't put world units here.
-  mouseRadius: 0.080,       // the client's panel value: a local opening about the pointer,
-                            //   divided by the group's scale here so the number survives a
-                            //   resize
-  mouseStrength: 0.075,     // ver30's value. Only read when hoverFeel < 1 — the displacement
-                            // end of the dial, silent at the shipped setting
-  falloffPower: 3.0,        // 1 = linear, 2 = soft outer edge with a firm core. ver30's value
+  mouseRadius: 0.350,       // radius of the tube that opens. The client's setting, and the
+                            //   top of the bar. Raised because the reach is
+                            //   now correctly divided by the group's scale — the old number
+                            //   was reaching 1.9x further than it said
+  mouseStrength: 0.075,     // how far a mote at the centre of it is pushed. Raised well past
+                            //   ver7-ver10's 0.055: it had been cut to 0.022 when the note
+                            //   was that hover felt too FAST, and that turned out to be the
+                            //   growth rather than the push — so the push had been quietly
+                            //   carrying a fix for something else
+  falloffPower: 3.0,        // 1 = linear, 2 = soft outer edge with a firm core
   mouseSmoothing: 0.10,     // lag on the cursor the motes actually see, per frame. Low
-                            //   values make the cloud trail the pointer. ver30's value.
+                            //   values make the cloud trail the pointer.
   mouseFadeSeconds: 0.45,   // fade in/out of the whole response when the pointer arrives
-                            //   or leaves, so nothing snaps. ver30's value.
+                            //   or leaves, so nothing snaps.
   // How hard the cursor's edge is blurred. The push is bounded by a radius, and with one
   // radius for every mote that boundary is exact: motes stop being pushed at precisely that
   // distance and pile up just outside it, which draws a clean circle on the page. No falloff
@@ -851,11 +844,13 @@ const CONFIG = {
                             //   mouseRadius: this wants to give several lobes ACROSS the
                             //   opening, not one
 
-  mouseCurlBoost: 0.0,      // ver30's value. Extra curl inside the push, as a multiple of the
-                            //   falloff. Zero: this and expandCurlBoost between them made
-                            //   the cloud visibly change PACE under the pointer, which reads
-                            //   as the effect being startled. The cursor may open a hole and
-                            //   grow the mass; it may not run the clock faster.
+  mouseCurlBoost: 0.0,      // extra curl inside the push, as a multiple of the falloff.
+                            //   Zero: this and expandCurlBoost between them made the cloud
+                            //   visibly change PACE under the pointer, which reads as the
+                            //   effect being startled. The cursor may open a hole and grow
+                            //   the mass; it may not run the clock faster.
+                            //   Keep it low — it scatters motes back into the hole the
+                            //   push just made, and over ~3 it closes it completely.
 
   // ------------------------------------------------------------ sphere shading
   // Each mote is a lit sphere, reconstructed per pixel on its billboard. These are the
@@ -1011,7 +1006,8 @@ const CONFIG = {
   ],
   rampFringe: 0.16,         // density below which alpha ramps to zero. This is the dial for
                             //   how far the scattered specks reach before they vanish
-  alphaGain: 0.43,          // the client's setting. Cut to a sixth against particleCount's
+  alphaGain: 0.36,          // AURORA ver6: a shade under the CTA's 0.43 so the wrap reads
+                            //   as haze around the words rather than paint over them
                             //   nine times, so the mass lands near where it was but is made
                             //   of far more, far fainter grains.
                             // overall presence against the page, applied last. The bloom used
@@ -1103,7 +1099,8 @@ const CONFIG = {
   //
   // It costs one extra render target and three small fullscreen passes. The particles are
   // still rendered ONCE: the shadow and the cloud are two composites of the same target.
-  shadow: true,             // ?shadow=0 turns it off
+  shadow: false,            // AURORA: the cloud floats over a dark photo, where a darkened
+                            //   copy of its own coverage would read as a smudge, not a shadow
   shadowOnly: false,        // ?shadowonly=1 — the shadow with the cloud held back, for
                             //   telling "not there" apart from "too faint"
   shadowStrength: 0.55,     // how dark the shadow gets where the cloud is solid
@@ -1147,8 +1144,7 @@ const CONFIG = {
   // Halved from 0.667. The pairing with the box still holds — the box is a fraction of the
   // size the cloud reaches when open, and this is the trip back — but the fraction is now
   // 0.75 rather than 0.6, so the cloud grows half as far off its resting size.
-  expandAmount: 0.00,       // the client's panel value: the bloom is off, the hover is the
-                            // trail's force alone
+  expandAmount: 0.34,
   // How near the pointer must come, as fractions of viewport height measured from the
   // cloud's centre. FULL strength anywhere inside expandHoverInner, then fading to
   // nothing at expandHoverRadius.
@@ -1453,54 +1449,6 @@ vec3 advect(vec3 p, float dist, float outward) {
 }
 `;
 
-// ---------------------------------------------------------------- GLSL: the mound, shared
-// The bottom mound is ONE shape that two shaders need: the vertex shader builds it, and the
-// simulation's cursor force has to know where each grain sits ON SCREEN so the pointer's
-// reach can be measured where the eye sees it. (In ver30 the sim's units and the world's
-// were the same space; the mound's across-space remap pulls them apart here.) Both include
-// this chunk, so the two can never disagree about where a grain is.
-//
-// Expects the including shader to declare `uniform vec3 uMound; uniform float uPeakX;`
-// before it, and to have GLSL_SNOISE available.
-const MOUND_GLSL = /* glsl */`
-void moundState(float across, float shape, float time,
-                out float ridge, out float calm, out float edgeDrop, out float height,
-                out float fold, out float detail) {
-  float flowTime = time * 0.25; // slowed: the surface drifts at a lazy pace
-  vec3 flowPoint = vec3(across * 3.2, shape * 2.8, flowTime);
-  fold = snoise3dDeriv(flowPoint).w;
-  detail = snoise3dDeriv(flowPoint * 2.3 + vec3(7.0, 19.0, 3.0)).w;
-  // VER6 «floating in the centre»: the floor is swept clean — no ridge, no heap, no
-  // dusting along the menu. The entire population hangs as one soft cloud mid-page, and
-  // the silhouette the shaders rebuild is deliberately featureless: the form lives in the
-  // gathered cloud, not in the surface.
-  ridge = 0.0;
-  // With no peak to protect, the calm zone is a constant: every part of the frame gets the
-  // same amount of noise, so the cloud breathes evenly wherever it is.
-  calm = 0.55;
-  // The layer lies LOW at the frame's borders and rises into the peak only about the
-  // selected category, so the silhouette is: thin base, distinct mountain, thin edges.
-  edgeDrop = 1.0 - 0.85 * smoothstep(0.72, 1.12, abs(across));
-  height = pow(shape, 1.35);
-}
-
-// A grain's position in LOCAL WORLD space — the space the pointer's ray and reach are
-// stated in. 'ay' returns the factor an offset in sim y maps through to world y, so a
-// force computed in world units can be divided back into sim units on the way out.
-vec3 moundWorld(vec3 s, float shape, out float ay) {
-  float across = s.x / uMound.z;
-  float ridge, calm, edgeDrop, height, fold, detail;
-  moundState(across, shape, uTime, ridge, calm, edgeDrop, height, fold, detail);
-  ay = 0.40 * edgeDrop * (0.35 + 0.65 * calm);
-  return vec3(
-    (across + fold * height * 0.08 * calm) * uMound.x,
-    height * uMound.y * (0.07 + 0.93 * ridge) * edgeDrop
-      * (1.0 + (fold * 0.38 + detail * 0.14) * calm)
-      + s.y * ay,
-    s.z);
-}
-`;
-
 // ---------------------------------------------------------------- GLSL: the simulation
 // One texel per particle. xyz is its OFFSET from its seat, w is its age in seconds; the
 // pass reads that, advances it by one frame of the field, and writes it back to the other
@@ -1554,24 +1502,15 @@ uniform float uSwirl;
 // matching entry of uStampD its ray direction. Weight 0 is an empty slot.
 uniform vec4  uStampO[${STAMP_SLOTS}];
 uniform vec3  uStampD[${STAMP_SLOTS}];
-uniform vec3  uMound;            // the mound's half-width, peak height, and seed radius —
-uniform float uPeakX;            // the selected category, in across-space. Both shared with
-                                 // the vertex shader so the cursor force can be measured in
-                                 // the space the eye sees.
-${MOUND_GLSL}
 uniform float uSettle;
 uniform float uDrag;
 uniform vec2  uSignHalf;         // the label's box, half-extents in this object's space
 uniform float uSignLeash;
 uniform float uSignShield;
-uniform vec3  uAttractPoint;     // kept for the shared uniform block; the pull's target is per grain now
-uniform float uMigrateX;         // the selected category's displacement, in simulation units
+uniform vec3  uAttractPoint;     // the label's centre, in this object's space
 uniform float uAttractRadius;
 uniform float uAttractCore;
 uniform float uAttractPull;
-uniform vec3  uAttractWorldScale; // sim→world scale per axis, so the grip's distance is a
-                                  // screen distance, not a raw simulation distance
-uniform vec3  uAttractSpread;     // per-grain target jitter, sim units — the cloud's VOLUME
 varying vec2 vUv;
 
 vec3 fieldVelocity(vec3 p){
@@ -1617,22 +1556,14 @@ vec3 birthImpulse(vec3 p, float age){
 // It is deliberately not a displacement toward the sign. The motes have to keep flowing on
 // the field while they are held — what makes it read as a cloud gathering somewhere is that
 // the drift is biased, not that the movement stops.
-vec3 attractForce(vec3 p, vec3 target){
+vec3 attractForce(vec3 p){
   if (uAttractPull < 1e-6) return vec3(0.0);
-  vec3 to = target - p;
-  float dSim = length(to);
-  if (dSim < 1e-6) return vec3(0.0);
-  // The grip is measured in WORLD units: the sim's axes map to the screen at very
-  // different scales (across is stretched by uMound.x/uMound.z, height by ~0.40), so a
-  // distance in raw sim units is not a distance on screen — the old sim-space Gaussian
-  // could leave the whole population out of reach of its own target.
-  float d = length(to * uAttractWorldScale);
-  // Lorentzian, not Gaussian: a fat tail, so a grain seated far from the target still
-  // feels a gentle draw and the WHOLE population eventually gathers — a Gaussian dies
-  // to nothing past twice the reach and the far seats would never leave the floor.
+  vec3 to = uAttractPoint - p;
+  float d = length(to);
+  if (d < 1e-6) return vec3(0.0);
   float grip = smoothstep(0.0, max(1e-5, uAttractCore * uAttractRadius), d)
-             / (1.0 + pow(d / max(1e-5, uAttractRadius), 2.0));
-  return (to / dSim) * (uAttractPull * grip);
+             * exp(-pow(d / max(1e-5, uAttractRadius), 2.0));
+  return (to / d) * (uAttractPull * grip);
 }
 
 // The cursor, as a force rather than as a displacement, and spread along the path the
@@ -1649,27 +1580,20 @@ vec3 attractForce(vec3 p, vec3 target){
 //   the TRAIL, so the disturbance is a path with a history and not a spot;
 //   the WARP,  so no contour of it is a circle;
 //   the SWIRL, so it stirs rather than sweeping a rim up in front of itself.
-vec3 cursorForce(vec3 here, float shape){
+vec3 cursorForce(vec3 p, float shape){
   if (uPush < 0.001) return vec3(0.0);
-
-  // Where this grain actually is ON SCREEN — the mound rebuilt in world units. In ver30 the
-  // sim's units and the world's were the same space and the force could measure directly;
-  // the mound's across-space remap pulls them apart here, so every distance below is taken
-  // in the space the ray and the reach are stated in.
-  float ay;
-  vec3 wHere = moundWorld(here, shape, ay);
 
   // The warp and the two noises are read at the PARTICLE and read ONCE, not once per stamp.
   // The shape belongs to the space the pointer moves through, so it stays where it is while
   // the cursor travels over it; read per stamp it would ride along with the cursor, which is
   // the very thing being fixed. Creeping in its own z so it is never twice the same shape.
-  vec3 wq = wHere * (uMouseWarpScale / max(1e-4, uMouseRadius)) + vec3(0.0, 0.0, uTime * 0.12);
+  vec3 wq = p * (uMouseWarpScale / max(1e-4, uMouseRadius)) + vec3(0.0, 0.0, uTime * 0.12);
   vec3 warp = vec3(snoise3dDeriv(wq).w,
                    snoise3dDeriv(wq + vec3(19.0, 7.0, 31.0)).w,
                    snoise3dDeriv(wq + vec3(53.0, 23.0, 11.0)).w * 0.35);
-  vec3 wp = wHere + warp * (uMouseWarp * uMouseRadius);
+  vec3 wp = p + warp * (uMouseWarp * uMouseRadius);
 
-  vec3 np = wHere * uMouseNoiseScale + vec3(0.0, 0.0, uTime * 0.15);
+  vec3 np = p * uMouseNoiseScale + vec3(0.0, 0.0, uTime * 0.15);
   // strength, so parts of the reach are barely touched and parts are shoved hard
   float gain = max(0.0,
     1.0 + snoise3dDeriv(np * 1.7 + vec3(5.0, 61.0, 13.0)).w * uMouseNoise);
@@ -1705,11 +1629,7 @@ vec3 cursorForce(vec3 here, float shape){
     vec3 push = m / (length(m) + 1e-5);
     acc += vec3(push.x * cb - push.y * sb, push.x * sb + push.y * cb, push.z) * f;
   }
-  // The force was measured in world units; the velocity it joins lives in sim units, where
-  // an offset maps to the screen through uMound.x/uMound.z across and through ~0.4 down —
-  // so the acceleration is divided by the same factors on the way out.
-  float ax = uMound.x / max(1e-5, uMound.z);
-  return vec3(acc.x / ax, acc.y / max(0.05, ay), acc.z) * uPush;
+  return acc * uPush;
 }
 
 void main(){
@@ -1733,14 +1653,15 @@ void main(){
   // rather than to the velocity, so a mote at the limit keeps its momentum and slides along
   // the boundary instead of stopping dead on it.
   vec2 seatQ = abs(seed.xy - uAttractPoint.xy) / max(uSignHalf, vec2(1e-5));
-  float mine = 1.0; // Keep the entire population bound to its moving category.
+  float mine = 1.0 - smoothstep(1.0, 1.35, max(seatQ.x, seatQ.y));
   float away = length(offset);
   if (mine > 0.0 && uSignLeash > 0.0 && away > uSignLeash) {
     offset *= mix(away, uSignLeash, mine) / away;
   }
 
-  // Wrap only the clock. Positions and momentum persist, including during selection changes.
-  if (age >= seed.w) age = mod(age, seed.w);
+  // Dead: back to the seat, age zero. The seat is the source, so the model's silhouette is
+  // what the cloud is continuously fed from rather than what it looks like.
+  if (age >= seed.w) { offset = vec3(0.0); age = 0.0; }
 
   gl_FragColor = vec4(offset, age);
 }`;
@@ -1772,28 +1693,15 @@ void main(){
   vec2 seatQ = abs(seed.xy - uAttractPoint.xy) / max(uSignHalf, vec2(1e-5));
   float mine = 1.0 - smoothstep(1.0, 1.35, max(seatQ.x, seatQ.y));
 
-  // The field is damped only mildly about the gather point — the floating cloud must
-  // keep drifting and edding forever (it is a FLOAT, not a held sign), so most of the
-  // field stays running even at the centre.
-  vec2 coreQ = (state.xy - uAttractPoint.xy) * uAttractWorldScale.xy;
-  float nearCore = exp(-pow(length(coreQ) / (0.35 * uAttractRadius), 2.0));
-  vec3 target = fieldVelocity(here) * (1.0 - 0.15 * nearCore)
-              + birthImpulse(here, age) + vec3(0.0, -uGravity, 0.0);
+  vec3 target = fieldVelocity(here) + birthImpulse(here, age) + vec3(0.0, -uGravity, 0.0);
   v += (target - v) * clamp(uSettle, 0.0, 1.0);
   v += cursorForce(here, fract(seed.w * 7.31)) * uDt * mix(1.0, uSignShield, mine);
-  // The gather. Each grain's own share of the target: the shared point plus a per-grain
-  // jitter (uAttractSpread), so the population fills a VOLUME around the gather point
-  // instead of packing into one bead — the airiness the CTA's plume has. Each grain
-  // answers on its own clock (the seed-scaled factor) and the field keeps churning
-  // underneath, so the cloud eddies instead of packing solid.
-  vec3 aim = uAttractPoint
-           + (vec3(fract(seed.x * 91.7), fract(seed.y * 61.7), fract(seed.z * 47.3)) - 0.5)
-             * uAttractSpread;
-  v += attractForce(here, aim)
-     * uDt * (0.55 + 0.90 * fract(seed.w * 7.31));
+  v += attractForce(here) * uDt;
   v *= uDrag;
 
-  // No rebirth: retain momentum across the age-clock wrap.
+  // a reborn particle starts still, or it would arrive at its seat carrying whatever it was
+  // doing when it died and the seed would visibly squirt
+  if (age >= seed.w) v = vec3(0.0);
 
   gl_FragColor = vec4(v, 0.0);
 }`);
@@ -1846,10 +1754,6 @@ uniform float uMouseEdgeBlur;
 uniform float uMouseNoise;
 uniform float uMouseNoiseScale;
 uniform float uMouseStrength;    // already scaled by the fade
-uniform float uFlowNoise;        // the organic surface noise, on the NOISE dial
-uniform float uSwirl;            // how much of the hover push turns around the trail
-uniform vec4  uStampO[${STAMP_SLOTS}];  // the pointer's trail: origin, age weight in w
-uniform vec3  uStampD[${STAMP_SLOTS}];  // and each stamp's direction
 uniform float uFalloffPower;
 uniform float uMouseCurlBoost;
 uniform float uCurlDivergence;
@@ -1857,10 +1761,6 @@ uniform sampler2D tSimPos;       // xyz offset from the seat, w age in seconds
 uniform vec3  uCloudCentre;      // the seat cloud's own centre, for the radial ramp below
 uniform vec3  uSignPoint;        // the label's centre and box, for the text's own group
 uniform vec2  uSignHalf;
-uniform vec3  uMound;           // local half-width, peak height, and simulation seed radius
-uniform float uPeakX;           // the selected category, in the mound's across-space
-uniform float uCrop;            // across-space limit where the band has fully sunk away
-${MOUND_GLSL}                   // moundState() + moundWorld(), shared with the sim's force
 uniform float uSignInk;
 uniform float uCloudRadius;
 uniform float uParticleSize;
@@ -1907,7 +1807,8 @@ void main(){
   // Swell in, hold, shrink away. The hold in the middle is deliberate and is most of the
   // cycle: with grow and fade meeting in the middle every mote is always on its way
   // somewhere and the cloud reads as twinkle rather than as a thing with a body.
-  float envelope = 1.0; // Persistent grains rather than fading out and respawning.
+  float envelope = smoothstep(0.0, uLifeGrow, lifePhase)
+                 * (1.0 - smoothstep(uLifeFadeStart, 1.0, lifePhase));
 
   // Travel ALONG THE FLOW as it lives, which is the whole correction of this pass. Measured
   // on Ref1, 97.8% of the motion runs along the filaments rather than across them: a crease
@@ -1916,36 +1817,6 @@ void main(){
   // that moving along would drag the thread with them — is what a fluid never does.
   //
   vec3 pos = simPos;
-  // Spread the carried grains along the floor, lifting the centre into a soft mountain.
-  // This remaps the persistent simulation; neither selection nor travel re-seeds particles.
-  float across = simPos.x / uMound.z;
-  float flowTime = uTime * 0.25; // slowed 1.5x: the surface drifts at a lazy pace
-  float ridge, calm, edgeDrop, height, fold, detail;
-  moundState(across, aShape, uTime, ridge, calm, edgeDrop, height, fold, detail);
-  // The organic surface noise, on the client's NOISE dial. This is the same field family
-  // the simulation's velocity carries — curl-and-gradient noise, coherent across space and
-  // drifting in time — so turning it up makes the mound breathe and ripple like the flow
-  // does, rather than turning into grain-level static. (An earlier attempt jittered each
-  // grain on its own random seed; it read as fuzz, not as fluid, and is gone.)
-  pos.x = (across + fold * height * 0.08 * calm * uFlowNoise) * uMound.x;
-  pos.y = height * uMound.y * (0.07 + 0.93 * ridge) * edgeDrop
-        * (1.0 + (fold * 0.38 + detail * 0.14) * calm * uFlowNoise)
-        + simPos.y * 0.40 * edgeDrop * (0.35 + 0.65 * calm);
-  // A slow private bob on top, so a grain at rest is still travelling — the tallest
-  // column moves most and the floor barely at all. Scaled by the same dial.
-  pos.y += uMound.y * (0.012 + 0.05 * ridge) * edgeDrop * calm * uFlowNoise
-         * sin(flowTime * (0.35 + aShape * 0.8) + aShape * 40.0);
-
-  // ---- the crop: the band sinks away toward the frame's sides -----------------
-  // No hard cut. The envelope is measured from the PEAK, not the page's centre, so the
-  // band dissolves the same way whichever category is selected and no tab is ever
-  // buried: approaching the crop limit the mound eases DOWN below the frame edge —
-  // the way it does in the client's crop reference — and the alpha thins with it.
-  // uCrop is that limit in across-space (1.0 is the page's own edge, past which there
-  // is nothing left to crop).
-  float cropD = abs(across - uPeakX);
-  pos.y -= uMound.y * smoothstep(uCrop * 0.45, uCrop, cropD);
-  float cropEnv = 1.0 - smoothstep(uCrop * 0.60, uCrop, cropD);
 
   // ---- 1b. bloom out of the corner on hover ---------------------------------
   // Applied to the resting seat, before curl and push, so the two cursor responses
@@ -1961,16 +1832,9 @@ void main(){
   float expand = uExpand * uExpandAmount * (1.0 - inPatch);
   pos = uExpandOrigin + (pos - uExpandOrigin) * (1.0 + expand);
 
-  // the crop's alpha joins the envelope: past the sink the band is gone entirely, and
-  // between the sink line and the limit the grains thin out as they go down
-  vFade = envelope * (1.0 - smoothstep(0.72, 1.0, aShape)) * cropEnv;
+  vFade = envelope;
 
   // ---- 2. cursor: distance to the pointer RAY -------------------------------
-  // The hover reads the pointer's TRAIL here, in this vertex shader, rather than in the
-  // simulation. Reason: the sim works in seed units while the ray arrives in world units,
-  // and after the mound's remap the two spaces disagree — uMound.x / uMound.z apart — so a
-  // force solved in there lands nowhere near the pointer. Here the ray and the mound are
-  // the same space, so the reach means what the dial says.
   float pushFalloff = 0.0;
   vec3  pushDir = vec3(0.0);
   float rayLen = length(uMouseRayDir);
@@ -2036,7 +1900,7 @@ void main(){
   // The field itself is the simulation's job now. What is left here is the extra churn the
   // cursor and the bloom ask for — a local agitation on top of the carried position, which
   // has to be instantaneous to answer the pointer and so cannot come from the buffer.
-  float curlInfluence = aCurlResp * clamp(amplification - 1.0, 0.0, 1.0);
+  float curlInfluence = aCurlResp * step(0.001, amplification - 1.0);
   if (curlInfluence > 0.0) {
     float ct = uTime * uCurlSpeed * 0.01;
     vec3 curlOffset = curlNoise(vec3(pos.x, pos.y, ct), uCurlFrequency, ct, effectiveCurl,
@@ -2046,14 +1910,14 @@ void main(){
     pos.z += curlOffset.z * 0.1 * curlInfluence;
   }
 
-  // The OLD hover's displacement, kept because it is one end of the hoverFeel dial and
-  // cannot be imitated by the force. A bounded DISPLACEMENT: the hole appears the instant
-  // the pointer arrives, at a fixed size, and holds. The force in the simulation integrates
-  // instead, so its wake keeps moving for as long as you stir and eases shut afterwards — a
-  // different behaviour, not a slower version of the same one.
+  // The OLD hover, kept, because it is one end of the dial and cannot be imitated by the
+  // new one. This is a bounded DISPLACEMENT: the hole appears the instant the pointer
+  // arrives, at a fixed size, and holds. The force in the simulation integrates instead, so
+  // its hole keeps opening for as long as you hover and eases shut afterwards — a different
+  // behaviour, not a slower version of the same one.
   //
-  // uMouseStrength carries (1 - hoverFeel), so at feel 1 this is silent and the simulation's
-  // force has it all — which is where the dial is set.
+  // uMouseStrength carries (1 - hoverFeel), so at 0 this is the whole effect and the
+  // simulation's force is off; at 1 it is silent and the force has it all.
   pos += pushDir * pushFalloff * uMouseStrength;
 
   vPos = pos;
@@ -3507,7 +3371,19 @@ function buildParticles(count) {
     // by carrying it, which is what ink actually does and what the curl was there for all
     // along. Give it a clean mass to work on and it does the work.
     if (CONFIG.cornerSeed) {
-      const ang = Math.random() * Math.PI * 2; // Surround a category, not a screen corner.
+      // Into the frame from the corner. The group's origin IS the screen corner, so the
+      // quarter running to -x and -y is the visible one; the spill either side of it is
+      // what stops the two straight edges reading as a cut.
+      // The quarter that runs INTO the frame from whichever corner is in force, which is
+      // the direction opposite the corner's own signs.
+      const cs = cornerSigns();
+      const base = Math.atan2(-cs.y, -cs.x);
+      // AURORA cornerFull: the whole circle. The anchor sits mid-edge on the menu, so
+      // there is no quadrant to keep to — a round Gaussian mass centred on it.
+      const ang = CONFIG.cornerFull
+        ? Math.random() * Math.PI * 2
+        : base - Math.PI * 0.25 + Math.random() * (Math.PI * 0.5)
+          + (Math.random() - 0.5) * CONFIG.cornerSpill;
       // A GAUSSIAN falloff, not a disc. A bounded radius puts a hard rim on the cloud, and
       // a hard rim on a radial draw is a circle — which is visible as a mask edge however
       // the inside is shaded. A Gaussian has no last radius: it just runs out, so there is
@@ -3959,12 +3835,6 @@ function buildParticles(count) {
     seedData[i * 4 + 1] = initPos[i * 3 + 1];
     seedData[i * 4 + 2] = initPos[i * 3 + 2];
     seedData[i * 4 + 3] = span;
-    // aShape MUST be the sim's own per-grain random, fract(seed.w * 7.31), or the two
-    // shaders disagree about a grain: cursorForce and moundWorld both key their shape term
-    // (the mound's height, the cursor's reach blur) off it. The sim reads it from the seed
-    // texture, the vertex from this attribute — so it is derived here from the same span
-    // that was just written into the seed, overwriting the plain Math.random() above.
-    shapes[i] = (span * 7.31) % 1.0;
   }
   inst('aSimUv', simUv, 2);
   inst('aLifeSpan', lifeSpan, 1);
@@ -4058,10 +3928,6 @@ const uniforms = {
   uSpecMinPx: { value: CONFIG.specMinPx },
   uSpecFullPx: { value: CONFIG.specFullPx },
   uViewportPx: { value: 1 },
-  uMound: { value: new THREE.Vector3(1, 1, 1) },
-  uPeakX: { value: 0 },
-  uCrop: { value: CONFIG.crop },
-  uFlowNoise: { value: CONFIG.flowNoise },
   uMinPx: { value: CONFIG.minPx },
   uGrainAxis: { value: new THREE.Vector2(1, 0) },
   uGrainStretch: { value: CONFIG.grainStretch },
@@ -4141,20 +4007,8 @@ const material = new THREE.ShaderMaterial({
   blending: THREE.NormalBlending,
 });
 
-// A ?count= override, so a shareable link can carry its own population without the panel.
-// Clamped to what the buffers can plausibly hold; anything unusable falls back to CONFIG.
-if (PARAMS.has('count')) {
-  const asked = Math.round(parseFloat(PARAMS.get('count')));
-  if (Number.isFinite(asked)) {
-    CONFIG.particleCount = Math.max(20000, Math.min(800000, asked));
-  }
-}
-
 let mesh = new THREE.Mesh(buildParticles(CONFIG.particleCount), material);
 mesh.frustumCulled = false;
-// A console/debug handle: lets a test harness (or the browser console) read the live
-// uniform and config values without reaching into the module.
-window.__ptsDebug = { uniforms, CONFIG, get sim() { return sim; }, renderer };
 group.add(mesh);
 
 // ---------------------------------------------------------------- the simulation
@@ -4173,13 +4027,6 @@ for (let i = 0; i < STAMP_SLOTS; i++) {
   stampO.push(new THREE.Vector4(0, 0, 0, 0));
   stampD.push(new THREE.Vector3(0, 0, 1));
 }
-// The main material's hover lives in the vertex shader now, and reads the SAME trail —
-// these are the array instances updateTrail writes, shared by reference, so both materials
-// see every new stamp without a copy. (The uniforms object above is built before these
-// arrays exist, which is why they are attached here and not in the literal.)
-uniforms.uStampO = { value: stampO };
-uniforms.uStampD = { value: stampD };
-uniforms.uSwirl = { value: THREE.MathUtils.clamp(CONFIG.hoverSwirl, 0, 1) };
 
 function makeSim() {
   const d = mesh.geometry.userData.sim;
@@ -4236,10 +4083,6 @@ function makeSim() {
       // array it is handed, so replacing it would leave the material reading the old one
       uStampO: { value: stampO },
       uStampD: { value: stampD },
-      // shared with the main material's vertex shader, so the cursor force can rebuild the
-      // mound in world units and measure the pointer where the eye sees it
-      uMound: { value: new THREE.Vector3(1, 1, 1) },
-      uPeakX: { value: 0 },
       uSettle: { value: CONFIG.settle },
       uDrag: { value: CONFIG.drag },
       // the label's pull. The point is written by place(), which is where the frame — and
@@ -4248,12 +4091,9 @@ function makeSim() {
       uSignLeash: { value: CONFIG.signLeash * d.radius },
       uSignShield: { value: CONFIG.signShield },
       uAttractPoint: { value: new THREE.Vector3(0, 0, 0) },
-      uMigrateX: { value: 0 },
       uAttractRadius: { value: 1 },
       uAttractCore: { value: CONFIG.attractCore },
       uAttractPull: { value: 0 },
-      uAttractWorldScale: { value: new THREE.Vector3(1, 1, 1) },
-      uAttractSpread: { value: new THREE.Vector3(0, 0, 0) },
     },
   });
 
@@ -4422,12 +4262,6 @@ function stepSim(dt) {
   u.uMouseWarp.value = CONFIG.mouseWarp;
   u.uMouseWarpScale.value = CONFIG.mouseWarpScale;
   u.uSwirl.value = THREE.MathUtils.clamp(CONFIG.hoverSwirl, 0, 1);
-  // the main material's vertex hover reads its own copy of the same dial
-  uniforms.uSwirl.value = u.uSwirl.value;
-  // the mound's own numbers, so the force can rebuild a grain's world position — the sim
-  // works in seed units, the pointer's ray and reach are stated in world units
-  u.uMound.value.copy(uniforms.uMound.value);
-  u.uPeakX.value = uniforms.uPeakX.value;
   // the pointer ray is already converted into the cloud's own space for the vertex shader
   u.uMouseRayOrigin.value.copy(uniforms.uMouseRayOrigin.value);
   u.uMouseRayDir.value.copy(uniforms.uMouseRayDir.value);
@@ -4448,9 +4282,7 @@ function stepSim(dt) {
   // the same conversion for the label's pull, so its number is a speed at any inertia
   u.uAttractPull.value = (CONFIG.attractPull * sim.radius) / (dtc * simPushGain);
   u.uAttractCore.value = CONFIG.attractCore;
-  // place() widens the leash to the whole menu span, so grains may migrate between
-  // categories; CONFIG.signLeash only carries the default until then.
-  u.uSignLeash.value = simLeash || CONFIG.signLeash * sim.radius;
+  u.uSignLeash.value = CONFIG.signLeash * sim.radius;
   u.uSignShield.value = CONFIG.signShield;
   uniforms.uSignInk.value = CONFIG.signInk;
 
@@ -4728,42 +4560,39 @@ function renderBloom() {
 }
 
 // ---------------------------------------------------------------- placement
-// The same simulated population travels as one rolling cloud along the bottom menu.
+// The group is parked in a corner of the viewport. anchor 1 = the edge exactly, so the
+// default sits the mass just inside the top-right and lets its tail run off the corner.
 let worldPush = 0;          // mouseStrength converted from frame-fraction to world units
-let simLeash = 0;           // how far a grain may stray from its seat, in simulation units
-// The shipped composition's own offset. The panel's offset bars are deltas FROM this, so
-// the defaults the client asked for are both what CONFIG carries and where the cloud sits.
-const OFFSET_NEUTRAL = { x: -0.100, y: 0.405 };
-const categoryMotion = { x: 0, y: 0, vx: 0, vy: 0, ready: false };
-const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
-const mobileLayout = matchMedia('(max-width: 600px) and (orientation: portrait)');
+const attractWorld = new THREE.Vector3();
 
-function followCategory(dt) {
-  const r = document.querySelector('#categories [aria-pressed="true"]').getBoundingClientRect();
-  const tx = (r.left + r.width / 2) / innerWidth;
-  const ty = (r.top + r.height / 2 + 8) / innerHeight;
-  const m = categoryMotion;
-  if (!m.ready || reducedMotion.matches) {
-    Object.assign(m, { x: tx, y: ty, vx: 0, vy: 0, ready: true });
-  } else {
-    // Critically damped spring, integrated in small steps so stalls cannot destabilize it.
-    // A little more eager than before, matching the stronger pull: the peak answers the
-    // new tab promptly and the grains roll in behind it.
-    for (let remaining = dt; remaining > 0;) {
-      const h = Math.min(remaining, 1 / 120);
-      m.vx += ((tx - m.x) * 30 - m.vx * 11) * h;
-      m.vy += ((ty - m.y) * 30 - m.vy * 11) * h;
-      m.x += m.vx * h;
-      m.y += m.vy * h;
-      remaining -= h;
-    }
+// AURORA: the pull's target element GLIDES between the category tabs on a CSS transition,
+// so its box is re-read every frame, not only when place() runs on a resize. Same body
+// place() used to carry inline; tick() calls it once a frame.
+function updateAttract(vh) {
+  if (!sim) return;
+  const el = document.getElementById('booknow');
+  if (el) {
+    const r = el.getBoundingClientRect();
+    const ppw = innerHeight / vh;
+    attractWorld.set((r.left + r.width / 2 - innerWidth / 2) / ppw,
+                     (innerHeight / 2 - (r.top + r.height / 2)) / ppw,
+                     CONFIG.anchorZ);
+    group.worldToLocal(attractWorld);
+    sim.step.uniforms.uAttractPoint.value.copy(attractWorld);
+    // The half-extents of the words, padded, in the same pre-scale units the seats are in.
+    // worldToLocal took the group's scale off the point above; an extent has to have it
+    // taken off explicitly, the same way the cursor's reach does.
+    const ms = Math.max(1e-6, CONFIG.massScale);
+    sim.step.uniforms.uSignHalf.value.set(
+      (r.width / 2 / ppw + CONFIG.signPad * vh) / ms,
+      (r.height / 2 / ppw + (CONFIG.signPad + CONFIG.signPadY) * vh) / ms);
+    // the draw reads the same box, to hold that group out of the bloom and to give it its
+    // heavier ink
+    uniforms.uSignPoint.value.copy(attractWorld);
+    uniforms.uSignHalf.value.copy(sim.step.uniforms.uSignHalf.value);
   }
-  place();
-  // The simulated grains keep churning, but the broad foot must stay level with the floor.
-  if (PARAMS.has('test')) {
-    window.particleState = { ...m, targetX: tx, targetY: ty,
-      geometry: mesh.geometry.uuid, simulation: sim.step.uuid, count: CONFIG.particleCount };
-  }
+  sim.step.uniforms.uAttractRadius.value =
+    (CONFIG.attractRadius * vh) / Math.max(1e-6, CONFIG.massScale);
 }
 
 function place() {
@@ -4771,33 +4600,11 @@ function place() {
   const vw = vh * camera.aspect;
   const cs = cornerSigns();
   // Scale first: uExpandOrigin below is converted with worldToLocal, which reads it.
-  group.scale.setScalar(0.65 * Math.min(1, innerWidth / 900));
-  const r = document.querySelector('#categories [aria-pressed="true"]').getBoundingClientRect();
-  const x = categoryMotion.ready ? categoryMotion.x : (r.left + r.width / 2) / innerWidth;
-  const y = categoryMotion.ready ? categoryMotion.y : (r.top + r.height / 2 + 8) / innerHeight;
-  const page = document.getElementById('page').getBoundingClientRect();
-  const floor = Math.min(innerHeight, page.bottom) + 3;
-  const ppw = innerHeight / vh;
-  // The emitter is anchored, not carried: it spans the whole bottom menu, and the grains
-  // migrate to the selected category through the simulation. A switch therefore never
-  // looks like the effect being picked up and put down somewhere else. The offset bars
-  // trim this anchor in fractions of the frame, as deltas from the shipped composition.
+  group.scale.setScalar(CONFIG.massScale);
   group.position.set(
-    (CONFIG.offsetX - OFFSET_NEUTRAL.x) * vh,
-    (innerHeight / 2 - floor) / ppw + (CONFIG.offsetY - OFFSET_NEUTRAL.y) * vh,
+    cs.x * (Math.abs(CONFIG.anchorX) * vw * 0.5 + CONFIG.offsetX * vh),
+    cs.y * (Math.abs(CONFIG.anchorY) * vh * 0.5 + CONFIG.offsetY * vh),
     CONFIG.anchorZ);
-  uniforms.uMound.value.set(
-    (page.width * 0.5) / ppw / group.scale.x,
-    (floor - y * innerHeight + 38) / ppw / group.scale.x,
-    CONFIG.cornerRadius * vh * CONFIG.cornerBias);
-  // The category's place in the mound's own across-space. The silhouette's peak and the
-  // simulation's pull are both derived from this one number, so the shape the grains climb
-  // and the force that carries them there can never disagree.
-  const peakAcross = ((x - 0.5) * vw / group.scale.x) / uniforms.uMound.value.x;
-  uniforms.uPeakX.value = peakAcross;
-  // The crop. On the mobile layout the menu spans the whole width, so the dial is relaxed
-  // there: sinking the band at the sides would bury the outer categories.
-  uniforms.uCrop.value = mobileLayout.matches ? Math.max(CONFIG.crop, 1.05) : CONFIG.crop;
   // Holding the anchor still under a magnification of z is exactly dividing its world
   // position by z: the projection scales x and y by z at a fixed depth, so the two cancel and
   // the cloud keeps its place on screen while its contents still grow.
@@ -4812,52 +4619,23 @@ function place() {
   // before the reach is compared against it — and the group is scaled. Left undivided, the
   // hover reached massScale times further than the number says, which it has been doing
   // quietly since the scale control was added.
-  uniforms.uMouseRadius.value = (CONFIG.mouseRadius * vh) / group.scale.x;
-  // The hover's vertex-displacement end of the dial, ver30's semantics: the strength is
-  // mouseStrength (a fraction of the frame height), divided by the group's scale because
-  // the ray lives in the group's local space. At the shipped hoverFeel of 1 this is
-  // multiplied to zero and the simulation's force carries the whole hover.
-  worldPush = CONFIG.mouseStrength * vh / group.scale.x;
+  uniforms.uMouseRadius.value = (CONFIG.mouseRadius * vh) / Math.max(1e-6, CONFIG.massScale);
+  worldPush = CONFIG.mouseStrength * vh;
 
   // The bloom grows the cloud away from the SCREEN CORNER, so the origin is that corner
   // expressed in the group's own space — not the group's origin, which is only wherever
   // the anchor happened to put the cloud's centre.
-  uniforms.uExpandOrigin.value.set(0, 0, 0);
+  uniforms.uExpandOrigin.value.set(cs.x * vw * 0.5, cs.y * vh * 0.5, CONFIG.anchorZ);
+  group.worldToLocal(uniforms.uExpandOrigin.value);
 
-  // The pull's target is the selected category expressed where the simulation works: its
-  // across-space displacement, at floor level — the mound itself does the climbing. The
-  // reach covers the whole span, so a grain at the far end still feels the new category,
-  // and the leash opens wide enough for the journey.
-  if (sim) {
-    // VER6: the pull's shared target is the MIDDLE OF THE PAGE, not the menu — the cloud
-    // simply floats there, drifting very slightly toward whichever category is selected
-    // (a whisper of the tab's direction, not a move). The lift is stated in screen pixels
-    // and converted into group-local units (÷ ppw·scale), then into sim y through the
-    // vertical mapping the vertex pass applies (0.40 × the calm-blend; this variant's
-    // calm is a constant 0.55). The world is ~vh units per frame, NOT pixels — every
-    // conversion has to go through ppw.
-    const yFactor = 0.40 * (0.35 + 0.65 * 0.55);
-    const pxToLocal = 1 / (ppw * group.scale.x);
-    const floatLocal = (floor - 0.47 * innerHeight) * pxToLocal;   // the cloud's centre, ~mid-page
-    sim.step.uniforms.uMigrateX.value = 0.0;
-    sim.step.uniforms.uAttractPoint.value.set(
-      peakAcross * uniforms.uMound.value.z * 0.30, floatLocal / yFactor, 0.0);
-    uniforms.uSignPoint.value.set(0, 0, 0);
-    // The grip is measured in world units now, so the reach is stated as a fraction of
-    // the frame: a generous halo the whole population can feel, and a wide, slow gather —
-    // this variant floats, it does not grab.
-    sim.step.uniforms.uAttractRadius.value = (vh / group.scale.x) * 0.50;
-    sim.step.uniforms.uAttractWorldScale.value.set(
-      uniforms.uMound.value.x / uniforms.uMound.value.z, yFactor, 1.0);
-    // The cloud's VOLUME: each grain's aim is jittered about the shared point, so the
-    // float is a breathing cloud roughly half a frame wide and a quarter tall, not a
-    // bead. Stated in sim units through the same mappings as the grip.
-    sim.step.uniforms.uAttractSpread.value.set(
-      0.70 * uniforms.uMound.value.z,            // ±0.35 across → ±~250px on a 1440 frame
-      (vh / group.scale.x) * 0.24 / yFactor,
-      2.0);
-    simLeash = (vh / group.scale.x) * 3.0;
-  }
+  // The sign, in the cloud's own space. Read from the element's box rather than from a
+  // constant, because the label is placed by CSS and is the fixed thing on the page: move it,
+  // resize the window, change the font, and the pull follows it with no number to update.
+  // Converted exactly as the bloom's origin is — worldToLocal takes the group's scale off, so
+  // the reach below is divided by that scale for the same reason the cursor's is.
+  // AURORA: the body moved into updateAttract(vh), which tick() calls every frame —
+  // the anchor glides between tabs on a CSS transition and the pull has to track it.
+  updateAttract(vh);
 
   uniforms.uHalfDepth.value = seatHalfDepth || Math.max(1e-3, CONFIG.boxDepth * vh * 0.5);
   // lifeDrift is given in plane widths, like every other distance the model decides
@@ -4992,8 +4770,7 @@ function updateCursor(dt) {
 
   uniforms.uMouseRayOrigin.value.copy(localOrigin);
   uniforms.uMouseRayDir.value.copy(seenPointer ? localDir : new THREE.Vector3());
-  // ver30's crossfade: the vertex displacement gets (1 - feel) of the push, the simulation's
-  // force the rest. At the shipped hoverFeel of 1 the displacement is silent.
+  // the direct displacement is the hoverFeel=0 end, so it fades OUT as the dial goes up
   uniforms.uMouseStrength.value =
     worldPush * fade * (1 - THREE.MathUtils.clamp(CONFIG.hoverFeel, 0, 1));
 
@@ -5037,9 +4814,6 @@ function resize() {
   place();
 }
 addEventListener('resize', resize);
-// An orientation change flips the layout between the mobile and desktop arrangements
-// without resizing the window in a way the resize event always catches; re-run place().
-mobileLayout.addEventListener('change', place);
 resize();
 
 // The buffers are particle-space, so this is built once and never touched by a resize.
@@ -5078,7 +4852,9 @@ const TSTEP = numParam('tstep', 0.001, 1);
 // inverse matrix and the bloom origin with worldToLocal — so the volume can turn without
 // the cursor or the corner anchor drifting out of register.
 function parallax() {
-  // Keep the mound's bottom horizontal; its internal GPU flow supplies the motion.
+  const w = (2 * Math.PI) / CONFIG.parallaxSeconds;
+  group.rotation.y = Math.sin(elapsed * w) * CONFIG.parallaxAmount;
+  group.rotation.x = Math.sin(elapsed * w * 0.63 + 1.7) * CONFIG.parallaxTilt;
   group.updateMatrixWorld();
 }
 
@@ -5146,10 +4922,34 @@ function tick() {
   if (warmed < CONFIG.warmSeconds && warmSpentMs < CONFIG.warmCeilingMs) { warmUp(); return; }
   const dt = TSTEP !== null ? TSTEP : Math.min(clock.getDelta(), 0.1);
   elapsed += dt;
-  followCategory(dt);
   // before the cursor, so the pointer ray is cast through the projection actually being drawn
   // this frame rather than through the previous one's
   updateZoom(dt);
+  // AURORA: the pull's target is a DOM element gliding between tabs — track it per frame,
+  // before the sim step, so the cloud flows after it
+  updateAttract(viewHeightAt(CONFIG.anchorZ));
+  // AURORA: the SEAT reservoir glides with it. The seats are baked at load, so a pull
+  // alone leaves the population's birthplace parked on the first tab and every respawn
+  // has to stream back across the frame; easing the group's own x toward the target keeps
+  // the whole population under the selected category, whatever tab that is. Same easing
+  // pace as the anchor's CSS transition, so the two move as one.
+  {
+    const vhGlide = viewHeightAt(CONFIG.anchorZ);
+    const elGlide = document.getElementById('booknow');
+    if (elGlide) {
+      const rg = elGlide.getBoundingClientRect();
+      const ppw = innerHeight / vhGlide;
+      const targetWorldX = (rg.left + rg.width / 2 - innerWidth / 2) / ppw;
+      const csx = cornerSigns().x;
+      const targetOffsetX = csx * targetWorldX / vhGlide
+        - Math.abs(CONFIG.anchorX) * camera.aspect * 0.5;
+      CONFIG.offsetX += (targetOffsetX - CONFIG.offsetX) * Math.min(1, dt * 1.1);
+      const cs = cornerSigns();
+      group.position.x = cs.x * (Math.abs(CONFIG.anchorX) * camera.aspect * vhGlide * 0.5
+                                 + CONFIG.offsetX * vhGlide);
+      group.updateMatrixWorld();
+    }
+  }
   // the motes' own clock, which the speed control scales. Accumulated rather than
   // multiplied at read time, so changing the pace never jumps their phase.
   uniforms.uTime.value += dt * CONFIG.speed;
@@ -5187,7 +4987,6 @@ const uiEl = document.getElementById('pui');
 if (uiEl && PARAMS.get('ui') !== '1') {
   uiEl.remove();
 } else if (uiEl) {
-  uiEl.hidden = false; // the markup ships hidden so nothing flashes before main.js decides
   // Colour. Every particle carries the same colour now — the tone in the picture is how many
   // of them overlap, not what any one of them is — so hue, saturation and lightness are one
   // colour rather than a ramp, and all five ramp stops are written from it. The readout is
@@ -5217,50 +5016,15 @@ if (uiEl && PARAMS.get('ui') !== '1') {
   // re-runs and nothing is re-thrown, so they drag live at any population, and each prints
   // the value to paste into CONFIG once it is settled.
   const ROWS = [
-    // The one control the client asked for: the population. It is a REBUILD — the seats and
-    // the simulation's buffers are one texel per particle, so a change of count re-throws
-    // everything — and it fires on release for the same reason.
-    { key: 'particleCount', name: 'quantity', cst: 'CONFIG.particleCount',
-      min: 50000, max: 800000, step: 25000, value: CONFIG.particleCount,
-      rebuild: true, round: true, text: () => CONFIG.particleCount.toLocaleString('en-US') },
-    // The pace. Read out of CONFIG every frame by the loop's clock accumulation, so it
-    // drags live and needs neither place() nor a rebuild.
-    { key: 'speed', name: 'speed', cst: 'CONFIG.speed',
-      min: 0, max: 1.5, step: 0.05, value: CONFIG.speed,
-      text: () => CONFIG.speed.toFixed(2) },
-    // The organic surface noise, as a multiple of the tuned look. Lives on the material as
-    // a plain uniform, so it drags live like the speed dial.
-    { key: 'flowNoise', name: 'noise', cst: 'CONFIG.flowNoise',
-      min: 0, max: 3, step: 0.05, value: CONFIG.flowNoise,
-      uni: 'uFlowNoise', text: () => CONFIG.flowNoise.toFixed(2) },
-    // The three basic hover dials: how far the reach extends, how hard the trail's force
-    // drives the grains, and how much the cloud blooms when the pointer comes near.
-    // reach and push are re-read from CONFIG every frame (place() and stepSim); the bloom
-    // lives on the material, so its uniform is pointed at the same value here.
-    { key: 'mouseRadius', name: 'hover radius', cst: 'CONFIG.mouseRadius',
-      min: 0.02, max: 0.60, step: 0.005, value: CONFIG.mouseRadius,
-      place: true, text: () => CONFIG.mouseRadius.toFixed(3) },
-    { key: 'hoverPush', name: 'hover push', cst: 'CONFIG.hoverPush',
-      min: 0, max: 3.0, step: 0.05, value: CONFIG.hoverPush,
-      text: () => CONFIG.hoverPush.toFixed(2) },
-    { key: 'expandAmount', name: 'hover bloom', cst: 'CONFIG.expandAmount',
-      min: 0, max: 0.60, step: 0.01, value: CONFIG.expandAmount,
-      uni: 'uExpandAmount', text: () => CONFIG.expandAmount.toFixed(2) },
     { key: 'offsetX', name: 'offset x', cst: 'CONFIG.offsetX',
       min: -0.5, max: 1.0, step: 0.005, value: CONFIG.offsetX,
       place: true, text: () => CONFIG.offsetX.toFixed(3) },
     { key: 'offsetY', name: 'offset y', cst: 'CONFIG.offsetY',
       min: -0.5, max: 1.0, step: 0.005, value: CONFIG.offsetY,
       place: true, text: () => CONFIG.offsetY.toFixed(3) },
-    // Where the band has fully sunk away at the frame's sides, in across-space. 1.0 is
-    // the page's own edge, so past ~1.05 there is no crop. place() re-reads it (the
-    // mobile layout relaxes the dial automatically).
-    { key: 'crop', name: 'crop', cst: 'CONFIG.crop',
-      min: 0.30, max: 1.20, step: 0.01, value: CONFIG.crop,
-      place: true, text: () => CONFIG.crop.toFixed(2) },
   ];
 
-  uiEl.innerHTML = '<h2>particles</h2>' + ROWS.map((r, i) =>
+  uiEl.innerHTML = '<h2>offset</h2>' + ROWS.map((r, i) =>
     '<div class="row"><div class="lbl">'
     + '<span class="name">' + r.name + '</span>'
     + '<span class="val" id="pv' + i + '">' + r.text() + '</span></div>'

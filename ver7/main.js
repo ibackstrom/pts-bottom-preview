@@ -31,8 +31,7 @@ const CONFIG = {
   // read the shading and it becomes an object at a distance; at 4 px it is a dot and the
   // cloud flattens into a spray however deep the box is. This is the single biggest
   // lever on whether the thing looks volumetric.
-  particleCount: 45000,     // AURORA ver8: "just a little bit of particles floating around"
-                            //   — a tenth of the CTA's population. A sparse dust, not a mass
+  particleCount: 450000,    // the client's setting off the panel, nine times what this was
                             //   tuned at and paired with alphaGain below: many faint grains
                             //   rather than few solid ones. Cost is linear in this and
                             //   nothing else here is, so it is the number to check on real
@@ -48,7 +47,7 @@ const CONFIG = {
   // down past about a pixel does not make finer grains, it makes invisible ones. At 0.62
   // with sizeMax 3.2 the whole population went sub-pixel and the drawn pixels fell a
   // hundredfold — the cloud read as a speck.
-  particleSize: 2.40,       // AURORA ver8: sparse dust reads best as slightly larger motes
+  particleSize: 2.05,        // sphere diameter, world units, before the per-mote multiplier
 
   // Size comes from a HEAVY-TAILED draw rather than a +/- spread around the base:
   // mult = sizeMin + (sizeMax - sizeMin) * rand^sizeBias.
@@ -159,8 +158,7 @@ const CONFIG = {
   // times denser, while shrinking the grain alone cuts each mote's coverage to a ninth. Doing
   // both at once cancels exactly, so the density that was tuned on the large version is the
   // density that arrives on the small one, with no change to the count.
-  cornerRadius: 0.20,       // AURORA ver8: wider than the CTA's 0.14 — the few motes are
-                            //   spread over the menu row, not packed into one clump
+  cornerRadius: 0.14,       // how far the cloud reaches, in viewport heights. This is the
                             //   size dial — it is measured against the FRAME, so it does
                             //   not have to be re-derived when anything else moves
   cornerBias: 0.42,         // spread of the Gaussian, in units of cornerRadius. It is no
@@ -491,8 +489,7 @@ const CONFIG = {
   depthDarken: 0.22,        // brightness lost across the same span
 
   // ------------------------------------------------------------ drift
-  floatingParticles: 0.40,  // AURORA ver8: more risers than the CTA's 0.16 — at this
-                            //   sparseness the FLOATING is the effect
+  floatingParticles: 0.16,  // fraction that travel. Travel and curl are exclusive — a
                             //   moving mote's curl is multiplied out — so this is really
                             //   the split between risers and shimmer.
   floatingSpeed: 0.17,      // clock rate for the 5-second travel-and-recycle cycle
@@ -742,9 +739,14 @@ const CONFIG = {
   // Stated as a speed, the same way the cursor's push is: a fraction of the mass radius per
   // second, with the force solved back out of it through the same gain, so the number means
   // one thing whatever the inertia is set to.
-  attractPull: 0.50,        // AURORA ver8: a faint pull — the dust DRIFTS toward the
-                            //   selected tab over several seconds rather than streaming
-  attractRadius: 0.60,      // reach, in viewport heights — the menu row and a little above
+  attractPull: 1.20,        // AURORA: the pull target MOVES between five tabs spread across
+                            //   most of the frame — up to six mass radii of travel. The old
+                            //   0.10 was a standing bias for a label that never moved; this
+                            //   has to actually carry the mass over in a few seconds
+  attractRadius: 0.85,      // reach, in viewport heights. Raised with the pull: the whole
+                            //   tab row has to be inside the grip, or a cloud parked on
+                            //   one tab feels nothing from a selection two tabs away
+                            //   (the Gaussian tail is what carries the far reach)
   attractCore: 0.30,        // as a fraction of the reach. INSIDE this the pull eases off to
                             //   nothing, which is what makes it gather rather than collapse:
                             //   a force that keeps pulling all the way to the centre packs
@@ -1001,8 +1003,7 @@ const CONFIG = {
   ],
   rampFringe: 0.16,         // density below which alpha ramps to zero. This is the dial for
                             //   how far the scattered specks reach before they vanish
-  alphaGain: 0.50,          // AURORA ver8: a tenth of the population, so each mote carries
-                            //   more presence than the CTA's faint grains
+  alphaGain: 0.43,          // the client's setting. Cut to a sixth against particleCount's
                             //   nine times, so the mass lands near where it was but is made
                             //   of far more, far fainter grains.
                             // overall presence against the page, applied last. The bloom used
