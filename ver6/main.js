@@ -158,8 +158,7 @@ const CONFIG = {
   // times denser, while shrinking the grain alone cuts each mote's coverage to a ninth. Doing
   // both at once cancels exactly, so the density that was tuned on the large version is the
   // density that arrives on the small one, with no change to the count.
-  cornerRadius: 0.17,       // AURORA ver6: bigger than the CTA's 0.14 — the cloud has to
-                            //   WRAP the pressed tab, not huddle under it
+  cornerRadius: 0.17,       // AURORA ver6: bigger — the cloud has to WRAP the pressed tab
                             //   size dial — it is measured against the FRAME, so it does
                             //   not have to be re-derived when anything else moves
   cornerBias: 0.42,         // spread of the Gaussian, in units of cornerRadius. It is no
@@ -178,8 +177,10 @@ const CONFIG = {
   // cut from, and the grains themselves are all long along the throw axis and compressed
   // across it. A field that is isotropic anywhere in that chain pulls the shape back toward
   // a circle, which is what a blob is.
-  flowAngle: 196,           // degrees, the throw axis: which way the pigment was dragged.
-                            //   196 runs left and slightly down from the corner
+  flowAngle: 180,           // degrees, the throw axis: which way the pigment was dragged.
+                            //   AURORA: 180 runs flat along the tab row — the CTA's 196
+                            //   smeared the grains down-left, which read as the cloud
+                            //   hanging off to one side of the menu
   silhouette: 3.4,          // long-to-across ratio of the streak. 1 is a circle
   streakTaper: 0.95,        // how fast the trailing end thins out, in plane widths. Small
                             //   is an abrupt stub, large is a long dissolving tail
@@ -748,9 +749,8 @@ const CONFIG = {
                             //   tab row has to be inside the grip, or a cloud parked on
                             //   one tab feels nothing from a selection two tabs away
                             //   (the Gaussian tail is what carries the far reach)
-  attractCore: 0.50,        // AURORA ver6: a wide core — the pull eases off well before the
-                            //   centre, so the gathered cloud stays HOLLOW and the tab
-                            //   text sits inside it readable instead of buried
+  attractCore: 0.50,        // AURORA ver6: wide core — the cloud stays HOLLOW, the tab text sits
+                            //   inside it readable instead of buried
                             //   nothing, which is what makes it gather rather than collapse:
                             //   a force that keeps pulling all the way to the centre packs
                             //   every mote it catches into one point and the sign ends up
@@ -1006,8 +1006,7 @@ const CONFIG = {
   ],
   rampFringe: 0.16,         // density below which alpha ramps to zero. This is the dial for
                             //   how far the scattered specks reach before they vanish
-  alphaGain: 0.36,          // AURORA ver6: a shade under the CTA's 0.43 so the wrap reads
-                            //   as haze around the words rather than paint over them
+  alphaGain: 0.36,          // AURORA ver6: haze around the words rather than paint over them
                             //   nine times, so the mass lands near where it was but is made
                             //   of far more, far fainter grains.
                             // overall presence against the page, applied last. The bloom used
@@ -1176,6 +1175,20 @@ const numParam = (k, lo, hi) => {
 // maximum texture height, 16384 on desktop, which is 4.19M motes. What actually decides
 // the number is cost: it is linear in the population and nothing else here is.
 if (numParam('p', 1, 900000) !== null) CONFIG.particleCount = Math.round(numParam('p', 1, 900000));
+
+// AURORA: park the SEAT reservoir on the gather anchor from the very first frame. The
+// page puts #booknow on the pressed tab before this module runs; without this the
+// reservoir starts at frame centre and the warm-up converges the offsets on a point to
+// the LEFT of the tab — inside the pull's ease-off core, so it never corrects itself and
+// the cloud reads permanently offset. offsetX is in viewport heights, and a pixel offset
+// divides into exactly those: px = offsetX * innerHeight.
+{
+  const elStart = document.getElementById('booknow');
+  if (elStart) {
+    const rStart = elStart.getBoundingClientRect();
+    CONFIG.offsetX = (rStart.left + rStart.width / 2 - innerWidth / 2) / innerHeight;
+  }
+}
 if (numParam('curl', 0, 5) !== null) CONFIG.curlAmplitude = numParam('curl', 0, 5);
 if (numParam('div', 0, 3) !== null) CONFIG.curlDivergence = numParam('div', 0, 3);
 if (numParam('px', 0, 1) !== null) { CONFIG.parallaxAmount = numParam('px', 0, 1); CONFIG.parallaxTilt = numParam('px', 0, 1) * 0.4; }
@@ -4595,6 +4608,27 @@ function updateAttract(vh) {
     (CONFIG.attractRadius * vh) / Math.max(1e-6, CONFIG.massScale);
 }
 
+// AURORA: the SEAT reservoir glides after the anchor, so the whole population stays
+// under the selected category whatever tab that is. Same easing pace as the anchor's
+// CSS transition, so the two move as one. Called from tick() every frame AND from
+// warmUp(), so the first convergence already happens in the right place.
+function glideSeats(dt) {
+  const vhGlide = viewHeightAt(CONFIG.anchorZ);
+  const elGlide = document.getElementById('booknow');
+  if (!elGlide) return;
+  const rg = elGlide.getBoundingClientRect();
+  const ppw = innerHeight / vhGlide;
+  const targetWorldX = (rg.left + rg.width / 2 - innerWidth / 2) / ppw;
+  const csx = cornerSigns().x;
+  const targetOffsetX = csx * targetWorldX / vhGlide
+    - Math.abs(CONFIG.anchorX) * camera.aspect * 0.5;
+  CONFIG.offsetX += (targetOffsetX - CONFIG.offsetX) * Math.min(1, dt * 1.1);
+  const cs = cornerSigns();
+  group.position.x = cs.x * (Math.abs(CONFIG.anchorX) * camera.aspect * vhGlide * 0.5
+                             + CONFIG.offsetX * vhGlide);
+  group.updateMatrixWorld();
+}
+
 function place() {
   const vh = viewHeightAt(CONFIG.anchorZ);
   const vw = vh * camera.aspect;
@@ -4910,6 +4944,9 @@ function warmUp() {
   const t0 = performance.now();
   const step = 1 / 60;
   do {
+    // AURORA: glide the seat reservoir with the warm-up, so the first convergence
+    // happens on the selected tab rather than wherever the frame centre is
+    glideSeats(step);
     uniforms.uTime.value += step * CONFIG.speed;
     stepSim(step * CONFIG.speed);
     warmed += step;
@@ -4928,28 +4965,8 @@ function tick() {
   // AURORA: the pull's target is a DOM element gliding between tabs — track it per frame,
   // before the sim step, so the cloud flows after it
   updateAttract(viewHeightAt(CONFIG.anchorZ));
-  // AURORA: the SEAT reservoir glides with it. The seats are baked at load, so a pull
-  // alone leaves the population's birthplace parked on the first tab and every respawn
-  // has to stream back across the frame; easing the group's own x toward the target keeps
-  // the whole population under the selected category, whatever tab that is. Same easing
-  // pace as the anchor's CSS transition, so the two move as one.
-  {
-    const vhGlide = viewHeightAt(CONFIG.anchorZ);
-    const elGlide = document.getElementById('booknow');
-    if (elGlide) {
-      const rg = elGlide.getBoundingClientRect();
-      const ppw = innerHeight / vhGlide;
-      const targetWorldX = (rg.left + rg.width / 2 - innerWidth / 2) / ppw;
-      const csx = cornerSigns().x;
-      const targetOffsetX = csx * targetWorldX / vhGlide
-        - Math.abs(CONFIG.anchorX) * camera.aspect * 0.5;
-      CONFIG.offsetX += (targetOffsetX - CONFIG.offsetX) * Math.min(1, dt * 1.1);
-      const cs = cornerSigns();
-      group.position.x = cs.x * (Math.abs(CONFIG.anchorX) * camera.aspect * vhGlide * 0.5
-                                 + CONFIG.offsetX * vhGlide);
-      group.updateMatrixWorld();
-    }
-  }
+  // AURORA: and the seat reservoir rides with it — see glideSeats
+  glideSeats(dt);
   // the motes' own clock, which the speed control scales. Accumulated rather than
   // multiplied at read time, so changing the pace never jumps their phase.
   uniforms.uTime.value += dt * CONFIG.speed;
