@@ -4261,7 +4261,7 @@ function stepSim(dt) {
   u.tPos.value = sim.a.texture;
   u.uDt.value = Math.min(dt, 0.05);
   u.uTime.value = uniforms.uTime.value;
-  u.uSpeed.value = CONFIG.simSpeed * sim.radius * travelBoost;
+  u.uSpeed.value = CONFIG.simSpeed * sim.radius;
   u.uFrequency.value = CONFIG.simFrequency;
   u.uFieldSpeed.value = CONFIG.simFieldSpeed;
   u.uDivergence.value = CONFIG.simDivergence;
@@ -4304,12 +4304,13 @@ function stepSim(dt) {
   // half a second after the pointer left, which is precisely the memory being built here.
   u.uPush.value = (CONFIG.hoverPush * sim.radius) / (dtc * simPushGain) * feel;
   // the same conversion for the label's pull, so its number is a speed at any inertia.
-  // AURORA ver10: the pull deepens while the target is in motion (travelBoost > 1) —
-  // the streaming population has to be carried all the way to the new tab, and at the
-  // weak base pull the tail kept lagging short of it.
-  u.uAttractPull.value = (CONFIG.attractPull * sim.radius) / (dtc * simPushGain)
-                       * (0.55 + 0.45 * travelBoost);
-  u.uAttractCore.value = CONFIG.attractCore;
+  // AURORA ver10: while the target is in motion the pull DEEPENS and its ease-in core
+  // SHRINKS, so the grip engages immediately at the click. The core at rest exists to keep
+  // the gathering from collapsing; during travel it held the motes un-gripped for the first
+  // moments, and the field's own current showed through as a backward drift.
+  const pullBoost = 0.55 + 0.45 * travelBoost;
+  u.uAttractPull.value = (CONFIG.attractPull * sim.radius) / (dtc * simPushGain) * pullBoost;
+  u.uAttractCore.value = CONFIG.attractCore / pullBoost;
   u.uSignLeash.value = CONFIG.signLeash * sim.radius;
   u.uSignShield.value = CONFIG.signShield;
   uniforms.uSignInk.value = CONFIG.signInk;
@@ -4633,14 +4634,11 @@ function updateAttract(vh, dt) {
     attractArc += (arcTarget - attractArc) * (1 - Math.exp(-dtA * 3.0));
     attractFlow.copy(attractSprung);
     attractFlow.y += attractArc;
-    // the sway eases in with the arc's own envelope, not with the raw travel flag —
-    // a flag appearing at full size in one frame is itself a jiggle
-    attractFlow.x += Math.sin(uniforms.uTime.value * 1.6) * 0.022
-                   * Math.min(1.0, attractArc / 0.05);
     sim.step.uniforms.uAttractPoint.value.copy(attractFlow);
     // the swirl deepens while travelling and hands back to the calm field on arrival —
-    // the draw-side curl for the visible stir, and the sim's own field speed for the
-    // drift that carries the population along the arc
+    // the draw-side curl for the visible stir. The SIM's field is NOT boosted: its local
+    // current here runs down-left, and boosting it made the cloud drift BACKWARD at the
+    // start of a switch before the pull took hold.
     uniforms.uCurlAmplitude.value = CONFIG.curlAmplitude * (1 + travel * 1.2);
     travelBoost = 1 + travel * 1.6;
     // The half-extents of the words, padded, in the same pre-scale units the seats are in.
