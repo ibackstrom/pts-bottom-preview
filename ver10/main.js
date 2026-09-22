@@ -491,7 +491,7 @@ const CONFIG = {
   depthDarken: 0.22,        // brightness lost across the same span
 
   // ------------------------------------------------------------ drift
-  floatingParticles: 0.40,  // AURORA ver8: more risers — at this sparseness the FLOATING is the effect
+  floatingParticles: 0.22,  // AURORA ver8: more risers — at this sparseness the FLOATING is the effect
                             //   moving mote's curl is multiplied out — so this is really
                             //   the split between risers and shimmer.
   floatingSpeed: 0.17,      // clock rate for the 5-second travel-and-recycle cycle
@@ -594,14 +594,14 @@ const CONFIG = {
   // The population all starts at age zero, so the unfurl is one coherent arrival rather than
   // a scatter; this does not change that, it only decides how much of it happens off-screen.
   // At 0 the whole arrival is visible, which is ver16.
-  warmSeconds: 6.0,         // seconds of simulation to run before anything is drawn
-  warmBudgetMs: 12,         // wall clock per frame spent on it. The steps are chunked rather
+  warmSeconds: 10.0,         // seconds of simulation to run before anything is drawn
+  warmBudgetMs: 25,         // wall clock per frame spent on it. The steps are chunked rather
                             //   than run in one block so the page keeps painting its loading
                             //   state and never looks hung
-  warmCeilingMs: 6000,      // hard stop on the whole warm-up. A slow device gets a cloud that
+  warmCeilingMs: 12000,      // hard stop on the whole warm-up. A slow device gets a cloud that
                             //   is only part-warmed, which is far better than a spinner: this
                             //   is a decoration, and it must never be the reason a page waits
-  fadeInSeconds: 1.4,       // the ink comes up over this once the warm-up is done, so the
+  fadeInSeconds: 2.2,       // the ink comes up over this once the warm-up is done, so the
                             //   mass materialises instead of appearing whole between frames
 
   // ------------------------------------------------------------ inertia
@@ -741,7 +741,7 @@ const CONFIG = {
   // Stated as a speed, the same way the cursor's push is: a fraction of the mass radius per
   // second, with the force solved back out of it through the same gain, so the number means
   // one thing whatever the inertia is set to.
-  attractPull: 0.50,        // AURORA ver8: a faint pull — the dust DRIFTS to the selected tab
+  attractPull: 0.85,        // AURORA ver8: a faint pull — the dust DRIFTS to the selected tab
                             //   most of the frame — up to six mass radii of travel. The old
                             //   0.10 was a standing bias for a label that never moved; this
                             //   has to actually carry the mass over in a few seconds
@@ -1523,6 +1523,14 @@ uniform vec3  uAttractPoint;     // the label's centre, in this object's space
 uniform float uAttractRadius;
 uniform float uAttractCore;
 uniform float uAttractPull;
+// AURORA ver10: the seats move in TEXTURE space, not by translating the group. The group's
+// transform carries every live particle rigidly — which is what made a tab switch read as
+// the emitter sliding along X. The shift is added wherever the SEAT is used as a position,
+// so reborn motes appear on the new tab while the pull attracts the living ones there.
+uniform vec2  uSeatShift;
+// Seconds since the pull's target started moving (saturates at rest). The per-particle
+// response to the pull is staggered against it — see the velocity pass.
+uniform float uTravelClock;
 varying vec2 vUv;
 
 vec3 fieldVelocity(vec3 p){
@@ -1653,7 +1661,7 @@ void main(){
   // read the field at the particle's real position, not at its seat, or every particle in
   // a filament would be pushed by the field where it STARTED and the filament would move
   // rigidly instead of stretching
-  vec3 here = seed.xyz + offset;
+  vec3 here = vec3(seed.xy + uSeatShift, seed.z) + offset;
   // Gravity is a constant VELOCITY, not an acceleration. Near zero by design — enough that
   // the mass drifts down and settles instead of hanging in a vacuum — and as a velocity it
   // cannot run away over a long life the way an accumulating one would.
@@ -1664,7 +1672,7 @@ void main(){
   // The text's group is bound to a short radius about its own seat. Applied to the position
   // rather than to the velocity, so a mote at the limit keeps its momentum and slides along
   // the boundary instead of stopping dead on it.
-  vec2 seatQ = abs(seed.xy - uAttractPoint.xy) / max(uSignHalf, vec2(1e-5));
+  vec2 seatQ = abs(vec2(seed.xy + uSeatShift) - uAttractPoint.xy) / max(uSignHalf, vec2(1e-5));
   float mine = 1.0 - smoothstep(1.0, 1.35, max(seatQ.x, seatQ.y));
   float away = length(offset);
   if (mine > 0.0 && uSignLeash > 0.0 && away > uSignLeash) {
@@ -1696,19 +1704,26 @@ void main(){
   vec4 seed  = texture2D(tSeed, vUv);
   vec4 state = texture2D(tPos,  vUv);
   float age  = state.w + uDt;
-  vec3 here  = seed.xyz + state.xyz;
+  vec3 here  = vec3(seed.xy + uSeatShift, seed.z) + state.xyz;
   vec3 v     = texture2D(tVel, vUv).xyz;
 
   // Which group this mote is in, from its SEAT and the label's BOX. A box distance, not a
   // radius: an ellipse inscribed in a wide short box narrows to a point at exactly the place
   // the last letters are, and the ends of the words would go unbacked.
-  vec2 seatQ = abs(seed.xy - uAttractPoint.xy) / max(uSignHalf, vec2(1e-5));
+  vec2 seatQ = abs(vec2(seed.xy + uSeatShift) - uAttractPoint.xy) / max(uSignHalf, vec2(1e-5));
   float mine = 1.0 - smoothstep(1.0, 1.35, max(seatQ.x, seatQ.y));
 
   vec3 target = fieldVelocity(here) + birthImpulse(here, age) + vec3(0.0, -uGravity, 0.0);
   v += (target - v) * clamp(uSettle, 0.0, 1.0);
   v += cursorForce(here, fract(seed.w * 7.31)) * uDt * mix(1.0, uSignShield, mine);
-  v += attractForce(here) * uDt;
+  // AURORA ver10: the pull is STAGGERED per mote while the target is in motion. Each mote
+  // gets its own delay from its seed, so a switch dissolves the cloud in a ragged wave
+  // instead of the whole population answering as one body — the difference between
+  // particles being ATTRACTED to the new tab and the emitter sliding across. The clock
+  // saturates past the largest delay, so at rest every mote is pulled as before.
+  float pd = fract(sin(dot(seed.xy, vec2(12.9898, 78.233))) * 43758.5453);
+  float resp = smoothstep(pd * 0.9, pd * 0.9 + 0.35, uTravelClock);
+  v += attractForce(here) * uDt * resp;
   v *= uDrag;
 
   // a reborn particle starts still, or it would arrive at its seat carrying whatever it was
@@ -1750,6 +1765,7 @@ attribute float aLifeSpan;       // its own birth-to-death, seconds — matches 
 attribute float aShape;          // 0..1, the seed for this mote's outline
 attribute float aLife;           // 1 if it lives and dies, 0 if it is permanent
 attribute float aOutward;        // 1 on a corner ray, 0 on everything else
+uniform vec2  uSeatShift;        // AURORA ver10: the seats' texture-space relocation
 
 uniform float uTime;
 uniform float uFloatingSpeed;
@@ -1810,7 +1826,7 @@ void main(){
   // before it, and what comes back is where the field has actually carried it since it was
   // born at its seat — the history, which is the only thing a filament can be made of.
   vec4 simState = texture2D(tSimPos, aSimUv);
-  vec3 simPos = aInitPos + simState.xyz;
+  vec3 simPos = vec3(aInitPos.xy + uSeatShift, aInitPos.z) + simState.xyz;
 
   // Age runs 0 to 1 over this particle's OWN lifespan. Not a shared cycle: a common period
   // makes the whole population die together, and the cloud blinks once per life.
@@ -1839,7 +1855,7 @@ void main(){
   // The text's group does not bloom with the rest. The bloom scales about the screen corner,
   // so on hover it carries everything outward — including the ink the words are read against,
   // which would slide off them at exactly the moment somebody is looking.
-  vec2 signQ = abs(aInitPos.xy - uSignPoint.xy) / max(uSignHalf, vec2(1e-5));
+  vec2 signQ = abs(vec2(aInitPos.xy + uSeatShift) - uSignPoint.xy) / max(uSignHalf, vec2(1e-5));
   float inPatch = 1.0 - smoothstep(1.0, 1.35, max(signQ.x, signQ.y));
   float expand = uExpand * uExpandAmount * (1.0 - inPatch);
   pos = uExpandOrigin + (pos - uExpandOrigin) * (1.0 + expand);
@@ -3912,6 +3928,7 @@ const uniforms = {
   uFloatingSpeed: { value: CONFIG.floatingSpeed },
   uCurlFrequency: { value: CONFIG.curlFrequency },
   uCurlAmplitude: { value: CONFIG.curlAmplitude },
+  uSeatShift: { value: new THREE.Vector2() },   // AURORA ver10: seats' texture-space relocation
   uCurlSpeed: { value: CONFIG.curlSpeed },
   uCurlDivergence: { value: CONFIG.curlDivergence },
   uInfluencePoint: { value: new THREE.Vector3(
@@ -4106,6 +4123,10 @@ function makeSim() {
       uAttractRadius: { value: 1 },
       uAttractCore: { value: CONFIG.attractCore },
       uAttractPull: { value: 0 },
+      // AURORA ver10: seats' texture-space relocation, and the stagger clock for the
+      // per-mote pull response — see the velocity pass
+      uSeatShift: { value: new THREE.Vector2() },
+      uTravelClock: { value: 2 },
     },
   });
 
@@ -4291,8 +4312,12 @@ function stepSim(dt) {
   // stamps' own decay is the ease. Carrying the fade as well would have deleted the trail
   // half a second after the pointer left, which is precisely the memory being built here.
   u.uPush.value = (CONFIG.hoverPush * sim.radius) / (dtc * simPushGain) * feel;
-  // the same conversion for the label's pull, so its number is a speed at any inertia
-  u.uAttractPull.value = (CONFIG.attractPull * sim.radius) / (dtc * simPushGain);
+  // the same conversion for the label's pull, so its number is a speed at any inertia.
+  // AURORA ver10: the pull deepens while the target is in motion (travelBoost > 1) —
+  // the streaming population has to be carried all the way to the new tab, and at the
+  // weak base pull the tail kept lagging short of it.
+  u.uAttractPull.value = (CONFIG.attractPull * sim.radius) / (dtc * simPushGain)
+                       * (0.55 + 0.45 * travelBoost);
   u.uAttractCore.value = CONFIG.attractCore;
   u.uSignLeash.value = CONFIG.signLeash * sim.radius;
   u.uSignShield.value = CONFIG.signShield;
@@ -4583,9 +4608,13 @@ const attractWorld = new THREE.Vector3();
 const attractSprung = new THREE.Vector3();
 const attractFlow = new THREE.Vector3();
 const attractDelta = new THREE.Vector3();
+const attractPrev = new THREE.Vector3();
 let attractSprungInit = false;
 let attractArc = 0;
+let attractMoving = false;
 let travelBoost = 1;        // sim field speed multiplier while the pull is in motion
+let travelClock = 2.0;      // seconds since the target started moving; saturates at rest
+const seatShift = new THREE.Vector2();   // AURORA ver10: seats' texture-space relocation
 
 // AURORA: the pull's target element GLIDES between the category tabs on a CSS transition,
 // so its box is re-read every frame, not only when place() runs on a resize. Same body
@@ -4600,6 +4629,18 @@ function updateAttract(vh, dt) {
                      (innerHeight / 2 - (r.top + r.height / 2)) / ppw,
                      CONFIG.anchorZ);
     group.worldToLocal(attractWorld);
+    // AURORA ver10: the travel clock — seconds since the pull's target last started moving.
+    // It resets when a switch begins and saturates at rest, so the per-mote stagger gates
+    // the pull only while a transition is young; see the velocity pass.
+    if (attractWorld.distanceToSquared(attractPrev) > 1e-8) {
+      if (!attractMoving) travelClock = 0;
+      attractMoving = true;
+    } else {
+      attractMoving = false;
+    }
+    attractPrev.copy(attractWorld);
+    travelClock = Math.min(2.0, travelClock + Math.min(0.05, dt || 1 / 60));
+    sim.step.uniforms.uTravelClock.value = travelClock;
     // AURORA ver10: spring the pull point after the raw box. The lag eases the chase —
     // the cloud starts moving as the box accelerates and settles as it decelerates,
     // rather than shadowing the box one-to-one.
@@ -4622,7 +4663,7 @@ function updateAttract(vh, dt) {
     // the draw-side curl for the visible stir, and the sim's own field speed for the
     // drift that carries the population along the arc
     uniforms.uCurlAmplitude.value = CONFIG.curlAmplitude * (1 + travel * 1.2);
-    travelBoost = 1 + travel * 0.9;
+    travelBoost = 1 + travel * 1.6;
     // The half-extents of the words, padded, in the same pre-scale units the seats are in.
     // worldToLocal took the group's scale off the point above; an extent has to have it
     // taken off explicitly, the same way the cursor's reach does.
@@ -4653,11 +4694,17 @@ function glideSeats(dt) {
   const csx = cornerSigns().x;
   const targetOffsetX = csx * targetWorldX / vhGlide
     - Math.abs(CONFIG.anchorX) * camera.aspect * 0.5;
-  CONFIG.offsetX += (targetOffsetX - CONFIG.offsetX) * Math.min(1, dt * 1.1);
-  const cs = cornerSigns();
-  group.position.x = cs.x * (Math.abs(CONFIG.anchorX) * camera.aspect * vhGlide * 0.5
-                             + CONFIG.offsetX * vhGlide);
-  group.updateMatrixWorld();
+  // AURORA ver10: the seats relocate in TEXTURE space (uSeatShift), NOT by translating the
+  // group. Translating the group carried every live particle rigidly — world position is
+  // group × (seed + offset) — which is exactly what read as the emitter sliding along X.
+  // The group stays where place() put it; the shift feeds the respawn, so dead motes rise
+  // on the new tab, while the staggered pull attracts the living ones across individually.
+  const ms = Math.max(1e-6, CONFIG.massScale);
+  const targetShiftX = csx * (targetOffsetX - CONFIG.offsetX) * vhGlide / ms;
+  const k = 1 - Math.exp(-Math.min(Math.max(dt, 1e-3), 0.05) * 5.0);
+  seatShift.x += (targetShiftX - seatShift.x) * k;
+  sim.step.uniforms.uSeatShift.value.copy(seatShift);
+  uniforms.uSeatShift.value.copy(seatShift);
 }
 
 function place() {
