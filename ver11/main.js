@@ -587,11 +587,12 @@ const CONFIG = {
                             //   thins once, seven seconds after load — radius 42 to 36 and
                             //   a quarter of the drawn pixels gone. At 0.85 the same deaths
                             //   are smeared over twelve seconds and there is nothing to see
-  simFrequency: 0.90,       // eddy size, as 1/frequency in world units. LOW on purpose: this
+  simFrequency: 0.65,       // eddy size, as 1/frequency in world units. LOW on purpose: this
                             //   octave is the macro swirl and the x3.1 one below carries the
                             //   filament detail. From the reference:
                             //   its field decorrelates over 13-20% of the mass radius.
-                            //   AURORA ver11: was 1.2 — bigger eddies, smoother sway
+                            //   AURORA ver11: was 0.90 — the customer asked for a still
+                            //   lower frequency on the big octave: broad, slow swells
   simFieldSpeed: 0.40,      // how fast the field itself changes, from the reference's
                             //   1.5-second coherence. Too high and the filaments never get
                             //   long enough to fold before the field that drew them is gone.
@@ -4691,7 +4692,9 @@ function updateAttract(vh, dt) {
     const dtA = Math.min(0.05, dt || 1 / 60);
     if (!attractSprungInit) { attractSprung.copy(attractWorld); attractSprungInit = true; }
     attractDelta.subVectors(attractWorld, attractSprung);
-    attractSprung.addScaledVector(attractDelta, 1 - Math.exp(-dtA * 3.0));
+    // AURORA ver11: rate 3.0 -> 5.5. With the faster CSS transition below the lag made the
+    // tail of the journey crawl — the cloud spent a second closing the last few pixels.
+    attractSprung.addScaledVector(attractDelta, 1 - Math.exp(-dtA * 5.5));
     // how hard the pull is travelling, in frame heights per second, 0 at rest
     const speed = attractDelta.length() / Math.max(1e-4, dtA) / Math.max(1e-6, vh);
     const travel = Math.min(1, speed / 0.35);
