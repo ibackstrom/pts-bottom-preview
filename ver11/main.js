@@ -159,9 +159,8 @@ const CONFIG = {
   // times denser, while shrinking the grain alone cuts each mote's coverage to a ninth. Doing
   // both at once cancels exactly, so the density that was tuned on the large version is the
   // density that arrives on the small one, with no change to the count.
-  cornerRadius: 0.15,       // AURORA ver11: was 0.20 — with the denser population the same
-                            //   radius put motes far outside the pull's reach, where the
-                            //   field's down-left current blew them into a permanent haze
+  cornerRadius: 0.19,       // AURORA ver11: 0.15 packed the bead too tight; 0.19 gives the
+                            //   gathered mass its volume back
                             //   size dial — it is measured against the FRAME, so it does
                             //   not have to be re-derived when anything else moves
   cornerBias: 0.42,         // spread of the Gaussian, in units of cornerRadius. It is no
@@ -752,7 +751,8 @@ const CONFIG = {
   // Stated as a speed, the same way the cursor's push is: a fraction of the mass radius per
   // second, with the force solved back out of it through the same gain, so the number means
   // one thing whatever the inertia is set to.
-  attractPull: 0.85,        // AURORA ver8: a faint pull — the dust DRIFTS to the selected tab
+  attractPull: 0.72,        // AURORA ver11: was 0.85 — softened so the gathering keeps its
+                            //   volume; the wider reach below carries the mass anyway
                             //   most of the frame — up to six mass radii of travel. The old
                             //   0.10 was a standing bias for a label that never moved; this
                             //   has to actually carry the mass over in a few seconds
@@ -767,10 +767,11 @@ const CONFIG = {
                             //   a force that keeps pulling all the way to the centre packs
                             //   every mote it catches into one point and the sign ends up
                             //   with a bead on it instead of a cloud
-  attractCenterGrip: 0.40,  // AURORA ver11: the grip's floor AT the centre. The smoothstep
+  attractCenterGrip: 0.18,  // AURORA ver11: the grip's floor AT the centre. The smoothstep
                             //   above was zero there — a dead zone the motes leaked out of
                             //   down-left on the field's current, leaving a haze trailing
-                            //   from the tab. 0 keeps the old leak; ~0.4 holds the mass
+                            //   from the tab. Low on purpose: enough to hold the mass
+                            //   against the current, not enough to pack it into a bead
 
   // ------------------------------------------------------------ the two groups
   // The population is split in two and neither group is a second system: same geometry, same
@@ -1607,9 +1608,13 @@ vec3 attractTo(vec3 p, vec3 target){
   // down-left. The settled cloud leaked into a permanent haze trailing left of the tab.
   // The floor holds the centre against that current; the field still carries the motes
   // (the drift is biased, not stopped), they just no longer wander out of the mass.
+  // The Gaussian falloff's EXPONENT is 1.6, not 2: a squared exponent dies so fast that the
+  // fringe beyond ~1.5 radii felt no pull at all, and the field's down-left current blew
+  // those motes into a permanent haze trailing from the tab. The fatter tail keeps a
+  // whisper of grip over the whole mass — a mist held, not a well with a dead rim.
   float grip = max(smoothstep(0.0, max(1e-5, uAttractCore * uAttractRadius), d),
                    uAttractCenterGrip)
-             * exp(-pow(d / max(1e-5, uAttractRadius), 2.0));
+             * exp(-pow(d / max(1e-5, uAttractRadius), 1.6));
   return (to / d) * (uAttractPull * grip);
 }
 
@@ -1740,7 +1745,13 @@ void main(){
   vec2 seatQ = abs(vec2(seed.xy + uSeatShift) - uAttractPoint.xy) / max(uSignHalf, vec2(1e-5));
   float mine = 1.0 - smoothstep(1.0, 1.35, max(seatQ.x, seatQ.y));
 
-  vec3 target = fieldVelocity(here) + birthImpulse(here, age) + vec3(0.0, -uGravity, 0.0);
+  // AURORA ver11: the field read AT the pull point is subtracted from the field everywhere —
+  // the curl noise has a constant local current (near the tab row it drifts down-left) that
+  // no grip could fully hold against: the settled mass leaked motes downwind, which read as
+  // a haze trailing from the tab. With the bias removed there is no net wind where the mass
+  // sits, while the field's own variation — the organic wander — is untouched.
+  vec3 fieldBias = fieldVelocity(uAttractPoint);
+  vec3 target = fieldVelocity(here) - fieldBias + birthImpulse(here, age) + vec3(0.0, -uGravity, 0.0);
   v += (target - v) * clamp(uSettle, 0.0, 1.0);
   v += cursorForce(here, fract(seed.w * 7.31)) * uDt * mix(1.0, uSignShield, mine);
   // AURORA ver10: the pull is ALWAYS on and always toward the sprung target — a magnet,
@@ -4340,9 +4351,12 @@ function stepSim(dt) {
   // SHRINKS, so the grip engages immediately at the click. The core at rest exists to keep
   // the gathering from collapsing; during travel it held the motes un-gripped for the first
   // moments, and the field's own current showed through as a backward drift.
-  const pullBoost = 0.55 + 0.45 * travelBoost;
+  // AURORA ver11: the travel boost is gentler — 0.55 + 0.45*travel packed the whole mass
+  // into a bead by arrival, which the customer read as losing the cloud's volume. 0.80 +
+  // 0.20 keeps the engagement sharp enough for a direct chase without the collapse.
+  const pullBoost = 0.80 + 0.20 * travelBoost;
   u.uAttractPull.value = (CONFIG.attractPull * sim.radius) / (dtc * simPushGain) * pullBoost;
-  u.uAttractCore.value = CONFIG.attractCore / pullBoost;
+  u.uAttractCore.value = Math.max(CONFIG.attractCore / pullBoost, 0.24);
   u.uSignLeash.value = CONFIG.signLeash * sim.radius;
   u.uSignShield.value = CONFIG.signShield;
   uniforms.uSignInk.value = CONFIG.signInk;
