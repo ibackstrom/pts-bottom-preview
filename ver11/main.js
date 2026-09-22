@@ -159,11 +159,11 @@ const CONFIG = {
   // times denser, while shrinking the grain alone cuts each mote's coverage to a ninth. Doing
   // both at once cancels exactly, so the density that was tuned on the large version is the
   // density that arrives on the small one, with no change to the count.
-  cornerRadius: 0.23,       // AURORA ver11: spread dial — 0.19 still read tight; 0.23 gives
-                            //   the mass the wider, airier spread the customer asked for
+  cornerRadius: 0.20,       // AURORA ver11: spread dial — 0.23 was too much volume, this is
+                            //   between the tight 0.15 bead and the wide 0.23
                             //   size dial — it is measured against the FRAME, so it does
                             //   not have to be re-derived when anything else moves
-  cornerBias: 0.50,         // spread of the Gaussian, in units of cornerRadius. It is no
+  cornerBias: 0.46,         // spread of the Gaussian, in units of cornerRadius. It is no
                             //   longer a power on a bounded radius — that gave the cloud a
                             //   last radius, which is a circle
   cornerSpill: 0.55,        // radians of overspill past the visible quarter, so the two
@@ -523,10 +523,12 @@ const CONFIG = {
                             //   over 13-20% of the mass radius, where this cloud's ran to
                             //   45% — eddies larger than the cloud they were supposed to
                             //   be curling, which is why nothing in it ever folded
-  curlAmplitude: 0.20,      // how far a mote is carried off its seat. This is the main
-                            //   "how alive is it" dial.
-  curlSpeed: 18.0,          // how fast the field itself evolves. The field translates in
+  curlAmplitude: 0.15,      // how far a mote is carried off its seat. This is the main
+                            //   "how alive is it" dial. AURORA ver11: was 0.20 — with the
+                            //   sim's field softened below, the per-mote wander reads calmer
+  curlSpeed: 12.0,          // how fast the field itself evolves. The field translates in
                             //   its own z with time, so motes do not retrace a path.
+                            //   AURORA ver11: was 18 — slowed with the sim for smoothness
   curlDivergence: 1.00,     // how much of a purely SPREADING field is mixed into the swirl,
                             //   0 = curl only. 1 puts divergence and vorticity at the same
                             //   rms, which is what the reference measures right through its
@@ -558,7 +560,9 @@ const CONFIG = {
   // small numbers, so the buffer keeps its precision where it is needed — and on a device
   // that will only give us half floats, an absolute position's smallest representable step
   // is larger than one frame's movement and the cloud would simply never start.
-  simSpeed: 0.118,          // the client's setting, near twice what this was tuned at.
+  simSpeed: 0.075,          // AURORA ver11: was 0.118 — the mass visibly jerked up/down/left/
+                            //   right. Slower field, same shapes: the drift is gentler, the
+                            //   churn reads smooth.
                             //   the field's strength, as a fraction of the mass radius per
                             //   second, so a resize does not change the pace. The reference
                             //   carries its motes at 3.0-3.5% of the mass radius per second;
@@ -583,18 +587,21 @@ const CONFIG = {
                             //   thins once, seven seconds after load — radius 42 to 36 and
                             //   a quarter of the drawn pixels gone. At 0.85 the same deaths
                             //   are smeared over twelve seconds and there is nothing to see
-  simFrequency: 1.2,        // eddy size, as 1/frequency in world units. LOW on purpose: this
+  simFrequency: 0.90,       // eddy size, as 1/frequency in world units. LOW on purpose: this
                             //   octave is the macro swirl and the x3.1 one below carries the
                             //   filament detail. From the reference:
-                            //   its field decorrelates over 13-20% of the mass radius
-  simFieldSpeed: 0.53,      // how fast the field itself changes, from the reference's
+                            //   its field decorrelates over 13-20% of the mass radius.
+                            //   AURORA ver11: was 1.2 — bigger eddies, smoother sway
+  simFieldSpeed: 0.40,      // how fast the field itself changes, from the reference's
                             //   1.5-second coherence. Too high and the filaments never get
-                            //   long enough to fold before the field that drew them is gone
+                            //   long enough to fold before the field that drew them is gone.
+                            //   AURORA ver11: was 0.53 — calmer
   simDivergence: 0.75,      // the spreading half of the field — see curlNoise. Held under 1
                             //   so the field turns more than it spreads: the first clip's
                             //   look is curling ink, not a burst opening out
-  simFine: 0.70,            // weight of a second octave at 3.1x the frequency. The large
-                            //   octave makes the lobes, this one the hairs inside them
+  simFine: 0.55,            // weight of a second octave at 3.1x the frequency. The large
+                            //   octave makes the lobes, this one the hairs inside them.
+                            //   AURORA ver11: was 0.70 — less fine chatter
   simGravity: 0.0,          // world units per second, straight down, always. Off here: a
                             //   flow field has no down, and the drift it added only pulled
                             //   the mass off the corner
