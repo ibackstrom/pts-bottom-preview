@@ -657,7 +657,7 @@ const CONFIG = {
   //
   // Solving for the force instead, F = speed / (dt * gain), makes the number mean one thing
   // at every setting of the dial.
-  hoverPush: 3.00,          // of the mass radius per second. The client's setting, and it
+  hoverPush: 0.60,          // of the mass radius per second. The client's setting, and it
                             //   is the top of the bar's range — see the note there
 
   // ---- the trail ------------------------------------------------------------------
@@ -666,7 +666,7 @@ const CONFIG = {
   // shove given on the right is still acting while the next one is given on the left and the
   // cloud is answering both at once - and the answer outlives the pointer instead of being
   // erased with it. This is the whole of "not only where the cursor is".
-  hoverTrail: 7.35,         // seconds a stamp keeps acting: the reach BACKWARDS IN TIME.
+  hoverTrail: 1.50,         // seconds a stamp keeps acting: the reach BACKWARDS IN TIME.
                             //   At 0 only the live pointer pushes, which is one stamp and
                             //   the old behaviour
   hoverTrailSlots: 16,      // how many stamps of the path are kept, up to STAMP_SLOTS. This
@@ -689,7 +689,7 @@ const CONFIG = {
   // eye reads the arrangement rather than the edge. Bending the space BEFORE the distance is
   // taken lobes every contour at once, and bends them the same way for neighbouring motes,
   // which is what reads as a form instead of as fuzz. A fraction of the reach.
-  mouseWarp: 1.50,
+  mouseWarp: 1.00,
   mouseWarpScale: 2.2,      // warp features across one reach. Around two gives a few lobes
                             //   over the opening; far higher is texture on a circle, not a
                             //   shape
